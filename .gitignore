@@ -1,0 +1,9 @@
+﻿frontend/config.js
+**/config.js
+.env
+.env.*
+node_modules/
+__pycache__/
+.DS_Store
+.vscode/
+.idea/

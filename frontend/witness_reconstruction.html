@@ -1,0 +1,1657 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RECON — 진술 기반 사건 재구성 시스템</title>
+<style>
+:root{
+  --bg:#080c12;--panel:#0d1219;--panel2:#111820;--line:#1e2a38;--line2:#263347;
+  --ink:#dce6f0;--ink2:#7e93a8;--ink3:#445566;
+  --signal:#ff6b35;--signal2:#ffaa80;--signal3:rgba(255,107,53,.12);
+  --evidence:#3ecfb4;--suspect:#ff4d4d;--victim:#3ecfb4;--bystander:#7d90a8;
+  --blue:#4a9eff;--gold:#f5c842;--green:#3ecb6f;--red:#ff4d4d;
+  --mono:'SF Mono',ui-monospace,'Cascadia Mono','Menlo',monospace;
+  --sans:'Inter',-apple-system,'Pretendard',system-ui,sans-serif;
+  --r:7px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);display:flex;flex-direction:column;height:100vh}
+header{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel);flex:none;min-height:50px;}
+.hdr-left{display:flex;align-items:center;gap:10px}
+.rec-dot{width:8px;height:8px;border-radius:50%;background:var(--ink3);flex:none;transition:.2s}
+.rec-dot.live{background:var(--signal);box-shadow:0 0 0 0 rgba(255,107,53,.5);animation:pulse 1.4s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 7px rgba(255,107,53,0)}100%{box-shadow:0 0 0 0 rgba(255,107,53,0)}}
+.hdr-title{font-size:13px;font-weight:700;letter-spacing:.5px}
+.hdr-sub{font-family:var(--mono);font-size:9.5px;color:var(--ink3);letter-spacing:.8px;text-transform:uppercase;margin-top:1px}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.badge{font-family:var(--mono);font-size:10.5px;border:1px solid var(--line2);padding:3px 9px;border-radius:4px}
+.badge.case{color:var(--signal2);border-color:rgba(255,170,128,.3)}
+.badge.wit{color:var(--blue);border-color:rgba(74,158,255,.3)}
+.badge.loc{color:var(--evidence);border-color:rgba(62,207,180,.3)}
+.icon-btn{background:none;border:1px solid var(--line2);color:var(--ink2);border-radius:5px;padding:5px 9px;font-size:12px;cursor:pointer;transition:.15s;font-family:var(--sans)}
+.icon-btn:hover{border-color:var(--ink3);color:var(--ink);background:var(--panel2)}
+main{flex:1;display:flex;min-height:0}
+#stage{flex:1;position:relative;background:radial-gradient(ellipse at 50% 35%,#111d2e,#070b11);overflow:hidden}
+#stage canvas{display:block}
+.stage-tag{position:absolute;font-family:var(--mono);font-size:9.5px;color:var(--ink3);letter-spacing:1px;pointer-events:none}
+.stage-tag.tl{left:14px;top:12px}
+.stage-tag.br{left:auto;right:14px;top:auto;bottom:12px}
+.legend{display:flex;gap:12px;font-family:var(--mono);font-size:10px}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
+aside{width:360px;flex:none;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line);background:var(--panel);flex:none}
+.tab-btn{flex:1;padding:10px 4px;font-size:11.5px;font-family:var(--sans);background:none;border:none;color:var(--ink3);cursor:pointer;transition:.15s;border-bottom:2px solid transparent;letter-spacing:.2px}
+.tab-btn:hover{color:var(--ink2)}
+.tab-btn.active{color:var(--signal2);border-bottom-color:var(--signal)}
+.tab-panel{display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+.tab-panel.active{display:flex}
+.blk{padding:13px 15px;border-bottom:1px solid var(--line);flex:none}
+.lbl{font-family:var(--mono);font-size:9.5px;color:var(--ink3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.ctrl-row{display:flex;gap:7px;margin-bottom:8px}
+button{font-family:var(--sans);cursor:pointer;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);border-radius:var(--r);padding:8px 12px;font-size:12.5px;transition:.15s;display:flex;align-items:center;gap:6px;justify-content:center}
+button:hover{border-color:var(--ink3);background:#182334}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.35;cursor:not-allowed}
+button.mic{flex:1;font-weight:600}
+button.mic.on{background:var(--signal);border-color:var(--signal);color:#1a0800}
+button.ghost{flex:none;color:var(--ink2);font-size:12px}
+button.primary{background:var(--signal);border-color:var(--signal);color:#fff;font-weight:600}
+button.primary:hover{background:#ff844a}
+.inputrow{display:flex;gap:6px}
+input[type=text],input[type=password]{flex:1;background:#080d13;border:1px solid var(--line2);color:var(--ink);border-radius:var(--r);padding:8px 11px;font-family:var(--sans);font-size:12.5px;outline:none;transition:.2s}
+input[type=text]:focus,input[type=password]:focus{border-color:var(--signal)}
+input::placeholder{color:var(--ink3)}
+.witness-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.wit-chip{padding:4px 10px;border-radius:20px;border:1px solid var(--line2);background:none;font-size:11px;font-family:var(--mono);cursor:pointer;color:var(--ink2);transition:.15s}
+.wit-chip:hover{border-color:var(--ink3);color:var(--ink)}
+.wit-chip.active{background:rgba(74,158,255,.15);border-color:rgba(74,158,255,.5);color:var(--blue)}
+.wit-chip.add{color:var(--signal2);border-color:rgba(255,107,53,.3)}
+.wit-chip.add:hover{background:var(--signal3)}
+.log{flex:1;overflow-y:auto;padding:12px 15px;min-height:0}
+.log .lbl{position:sticky;top:-12px;background:var(--panel);padding-top:4px;margin:0 0 8px;z-index:1}
+.entry{font-size:12.5px;line-height:1.6;color:var(--ink);padding:7px 0 7px 11px;border-left:2px solid var(--line2);margin-bottom:3px;position:relative;animation:slidein .3s ease}
+.entry.interim{color:var(--ink3);font-style:italic;border-color:var(--line)}
+.entry .t{font-family:var(--mono);font-size:9px;color:var(--ink3);display:block;margin-bottom:2px;letter-spacing:.4px}
+.entry .wit-tag{font-family:var(--mono);font-size:9px;padding:1px 6px;border-radius:3px;margin-right:5px;background:rgba(74,158,255,.15);color:var(--blue)}
+@keyframes slidein{from{opacity:0;transform:translateX(-5px)}to{opacity:1;transform:none}}
+.log::-webkit-scrollbar{width:5px}.log::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+.montage-section{padding:13px 15px;border-bottom:1px solid var(--line)}
+.montage-section .lbl{margin-bottom:8px}
+.mont-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:12.5px}
+.mont-row .key{color:var(--ink2);font-size:11.5px;width:80px;flex:none}
+.mont-row .val{color:var(--ink);flex:1;text-align:right;font-family:var(--mono);font-size:12px}
+.mont-row .swatch{width:20px;height:20px;border-radius:4px;border:1px solid var(--line2);margin-left:8px;flex:none}
+.height-bar{display:flex;align-items:flex-end;gap:3px;height:40px;margin-top:6px}
+.height-bar div{width:18px;background:var(--line2);border-radius:2px;transition:.4s}
+.height-bar div.hi{background:var(--signal)}
+.montage-empty{font-size:12px;color:var(--ink3);text-align:center;padding:24px 0;font-style:italic}
+.timeline-wrap{flex:1;overflow-y:auto;padding:12px 15px}
+.tl-item{display:flex;gap:12px;margin-bottom:14px;animation:slidein .3s ease}
+.tl-dot{width:10px;height:10px;border-radius:50%;background:var(--signal);flex:none;margin-top:4px;box-shadow:0 0 6px rgba(255,107,53,.5)}
+.tl-dot.past{background:var(--line2);box-shadow:none}
+.tl-line{width:1px;background:var(--line2);flex:none;margin:0 4.5px}
+.tl-time{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-bottom:2px}
+.tl-event{font-size:12.5px;color:var(--ink);line-height:1.5}
+.tl-wit{font-size:10.5px;color:var(--blue);margin-top:2px}
+.tl-empty{font-size:12px;color:var(--ink3);text-align:center;padding:32px 0;font-style:italic}
+.report-wrap{flex:1;overflow-y:auto;padding:12px 15px;display:flex;flex-direction:column;gap:12px}
+.report-section{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:13px}
+.report-section h4{font-size:11.5px;font-family:var(--mono);color:var(--signal2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+.report-section p{font-size:12.5px;color:var(--ink2);line-height:1.7}
+.contradiction-box{background:rgba(255,77,77,.07);border:1px solid rgba(255,77,77,.3);border-radius:var(--r);padding:10px 13px;font-size:12px;color:#ff8a8a;line-height:1.6}
+.contradiction-box .lbl{color:var(--red);margin-bottom:5px}
+.preset-list{display:flex;flex-direction:column;gap:6px}
+.preset-btn{justify-content:flex-start;text-align:left;font-size:11.5px;color:var(--ink2);border-style:dashed;padding:7px 10px}
+.preset-btn:hover{color:var(--ink)}
+.preset-btn b{color:var(--signal2);font-weight:600;margin-right:7px;font-family:var(--mono);font-size:10.5px}
+.status-bar{display:flex;align-items:center;gap:8px;padding:6px 16px;border-top:1px solid var(--line);background:#060a0f;font-family:var(--mono);font-size:10.5px;color:var(--ink3);flex:none;min-height:30px}
+.status-bar .spin{width:10px;height:10px;border:2px solid var(--line2);border-top-color:var(--signal);border-radius:50%;animation:spin .7s linear infinite;display:none}
+.status-bar.busy .spin{display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.status-txt{flex:1}
+.stat-pill{padding:2px 7px;border-radius:3px;font-size:10px;letter-spacing:.4px}
+.stat-pill.ok{background:rgba(62,203,111,.15);color:var(--green)}
+.stat-pill.warn{background:rgba(255,77,77,.15);color:var(--red)}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s}
+.overlay-box{background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:24px;width:380px;max-width:90vw}
+.overlay-box h3{font-size:15px;font-weight:700;margin-bottom:16px}
+.overlay-box label{font-size:12px;color:var(--ink2);display:block;margin-bottom:5px}
+.overlay-box .note{font-size:11px;color:var(--ink3);margin-top:8px;line-height:1.5}
+.overlay-close{float:right;background:none;border:none;color:var(--ink2);font-size:16px;cursor:pointer;padding:0}
+.btn-row{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+@media(max-width:760px){
+  main{flex-direction:column}
+  aside{width:100%;border-left:none;border-top:1px solid var(--line);max-height:50vh}
+  #stage{min-height:280px}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="hdr-left">
+    <span class="rec-dot" id="recDot"></span>
+    <div>
+      <div class="hdr-title">RECON SYSTEM</div>
+      <div class="hdr-sub">witness statement → live 3d reconstruction</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <span class="badge case" id="caseId">CASE-0001</span>
+    <span class="badge wit" id="witCount">증인 1명</span>
+    <span class="badge loc" id="coordTag">좌표 미설정</span>
+    <span class="badge loc" id="locTag">위치 미상</span>
+    <button class="icon-btn" id="settingsBtn" title="API 설정">⚙</button>
+    <button class="icon-btn" id="captureBtn" title="장면 캡처">📷</button>
+  </div>
+</header>
+<main>
+  <div id="stage">
+    <div class="stage-tag tl">RECON·VIEW · AUTO-ORBIT</div>
+    <div class="stage-tag br legend">
+      <span><i style="background:#ff4d4d"></i>용의자</span>
+      <span><i style="background:#3ecfb4"></i>피해자</span>
+      <span><i style="background:#7d90a8"></i>목격자</span>
+      <span><i style="background:#f5c842"></i>경찰</span>
+    </div>
+  </div>
+  <aside>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="input">진술</button>
+      <button class="tab-btn" data-tab="montage">몽타주</button>
+      <button class="tab-btn" data-tab="timeline">타임라인</button>
+      <button class="tab-btn" data-tab="report">보고서</button>
+      <button class="tab-btn" data-tab="suspect">3D 용의자</button>
+    </div>
+    <div class="tab-panel active" id="tab-input">
+      <div class="blk">
+        <div class="lbl">사건 현장 (좌표로 불러오기)</div>
+        <div class="inputrow">
+          <input type="text" id="coordIn" placeholder="위도, 경도 (예: 37.4659, 127.0376)" value="37.4659, 127.0376">
+          <button id="loadBtn" class="ghost">불러오기</button>
+        </div>
+      </div>
+      <div class="blk">
+        <div class="lbl">증인 선택</div>
+        <div class="witness-row" id="witnessRow">
+          <button class="wit-chip active" data-wid="0">증인 A</button>
+          <button class="wit-chip add" id="addWitBtn">+ 증인 추가</button>
+        </div>
+      </div>
+      <div class="blk">
+        <div class="lbl">진술 입력</div>
+        <div class="ctrl-row">
+          <button class="mic" id="micBtn"><span id="micLabel">🎙 음성 진술 시작</span></button>
+          <button class="ghost" id="resetBtn" title="장면 초기화">↺ 초기화</button>
+        </div>
+        <div class="inputrow">
+          <input type="text" id="textIn" placeholder="진술 입력 후 Enter… (예: 검은 후드 남자가 골목으로 뛰었어요)">
+          <button id="sendBtn" class="ghost">재현</button>
+        </div>
+      </div>
+      <div class="blk">
+        <div class="lbl">시나리오 재생 (오프라인)</div>
+        <div class="preset-list" id="presets"></div>
+      </div>
+      <div class="log" id="log">
+        <div class="lbl">진술 로그</div>
+      </div>
+    </div>
+    <div class="tab-panel" id="tab-montage">
+      <div class="montage-section">
+        <div class="lbl">추출된 용의자 정보</div>
+        <div id="montageContent"><div class="montage-empty">진술을 입력하면 용의자 인상착의가 자동 추출됩니다</div></div>
+      </div>
+      <div class="montage-section" style="flex:1;overflow-y:auto">
+        <div class="lbl">기타 등장인물</div>
+        <div id="entityList" style="font-size:12.5px;color:var(--ink2);line-height:1.8">아직 등록된 인물이 없습니다.</div>
+      </div>
+    </div>
+    <div class="tab-panel" id="tab-timeline">
+      <div class="timeline-wrap" id="timelineWrap">
+        <div class="lbl" style="margin-bottom:12px">사건 타임라인</div>
+        <div id="timelineItems"><div class="tl-empty">진술이 추가되면 타임라인이 자동으로 생성됩니다</div></div>
+      </div>
+    </div>
+    <div class="tab-panel" id="tab-report">
+      <div class="blk" style="flex:none">
+        <div class="lbl">AI 사건 보고서</div>
+        <div class="ctrl-row">
+          <button class="primary" id="genReportBtn">🤖 보고서 생성</button>
+          <button class="ghost" id="copyReportBtn">복사</button>
+        </div>
+      </div>
+      <div class="report-wrap" id="reportWrap">
+        <div style="font-size:12px;color:var(--ink3);text-align:center;padding:32px 0;font-style:italic">진술 입력 후 보고서 생성 버튼을 누르세요</div>
+      </div>
+    </div>
+    <div class="tab-panel" id="tab-suspect" style="padding:0;overflow:hidden">
+      <iframe id="suspectFrame" src="suspect-reconstructor-3d.html" style="width:100%;height:100%;border:0;display:block" title="3D 용의자 재구성"></iframe>
+    </div>
+  </aside>
+</main>
+<div class="status-bar" id="statusBar">
+  <div class="spin"></div>
+  <div class="status-txt" id="statusTxt">대기 중 — 음성·텍스트·시나리오로 시작하세요</div>
+  <span class="stat-pill ok" id="statPill">READY</span>
+</div>
+<div class="overlay" id="settingsOverlay" style="display:none">
+  <div class="overlay-box">
+    <button class="overlay-close" id="settingsClose">✕</button>
+    <h3>⚙ API 설정</h3>
+    <label>Anthropic API Key</label>
+    <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." style="margin-bottom:4px">
+    <div class="note">※ 키는 localStorage에 저장됩니다.<br>※ CORS 제한 시 로컬 프록시 서버를 사용하거나 API 없이 키워드 모드로 이용하세요.</div>
+    <div class="btn-row">
+      <button class="ghost" id="settingsClose2">취소</button>
+      <button class="primary" id="saveApiKey">저장</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ═══════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════ */
+let API_KEY = "";
+const witnesses = [{id:0, name:"증인 A", statements:[]}];
+let activeWitId = 0;
+let accumulated = "";
+let timelineItems = [];
+let currentMontage = null;
+let contradictions = [];
+let reportText = "";
+
+/* ═══════════════════════════════════════════════
+   THREE.JS SCENE
+═══════════════════════════════════════════════ */
+const stage = document.getElementById('stage');
+let scene, camera, renderer, ground, camAngle=0;
+const entities = new Map();
+const props    = new Map();
+const arrows   = new Map();
+let cityGroup;                                   // 지도(OSM) 건물 컨테이너
+let buildingRecs = [], lastBuildingRec = null;   // {mesh,cx,cz,baseHex,identified}
+
+const KIND_COLOR = {suspect:'#ff4d4d', victim:'#3ecfb4', bystander:'#7d90a8', officer:'#f5c842'};
+
+function init3D(){
+  scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x070b11,40,110);
+  const w=stage.clientWidth, h=stage.clientHeight;
+  camera = new THREE.PerspectiveCamera(42,w/h,0.1,200);
+  camera.position.set(0,17,24);
+  renderer = new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});
+  renderer.setSize(w,h);
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.shadowMap.enabled = true;
+  stage.appendChild(renderer.domElement);
+  scene.add(new THREE.AmbientLight(0x5a6a80,0.9));
+  const key = new THREE.DirectionalLight(0xfff0e0,1.2);
+  key.position.set(8,18,10); key.castShadow=true; scene.add(key);
+  const rim = new THREE.DirectionalLight(0xff6b35,0.3);
+  rim.position.set(-10,6,-8); scene.add(rim);
+  const gMat = new THREE.MeshStandardMaterial({color:0x111b26,roughness:1});
+  ground = new THREE.Mesh(new THREE.PlaneGeometry(70,70),gMat);
+  ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+  const grid = new THREE.GridHelper(70,35,0x263347,0x182233);
+  grid.position.y=0.01; scene.add(grid);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.5,0.65,32),
+    new THREE.MeshBasicMaterial({color:0x263347,side:THREE.DoubleSide}));
+  ring.rotation.x=-Math.PI/2; ring.position.y=0.02; scene.add(ring);
+  cityGroup = new THREE.Group(); scene.add(cityGroup);   // 지도 건물 컨테이너
+  window.addEventListener('resize',onResize);
+  animate();
+}
+function onResize(){
+  const w=stage.clientWidth,h=stage.clientHeight;
+  camera.aspect=w/h; camera.updateProjectionMatrix(); renderer.setSize(w,h);
+}
+
+/* ═══════════════════════════════════════════════
+   HELPER
+═══════════════════════════════════════════════ */
+const SKIN = 0xe2cdb0;
+function hi(hex){ return parseInt((hex||'#888888').replace('#',''),16); }
+function mat(color,rough=0.7,metal=0){
+  return new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal});
+}
+function addTube(g,x1,y1,z1,x2,y2,z2,r,col){
+  const dx=x2-x1,dy=y2-y1,dz=z2-z1;
+  const len=Math.sqrt(dx*dx+dy*dy+dz*dz);
+  if(len<0.001) return;
+  const tube=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,6),mat(col,0.4,0.3));
+  tube.position.set((x1+x2)/2,(y1+y2)/2,(z1+z2)/2);
+  tube.quaternion.setFromUnitVectors(
+    new THREE.Vector3(0,1,0),
+    new THREE.Vector3(dx/len,dy/len,dz/len));
+  g.add(tube);
+}
+
+/* ═══════════════════════════════════════════════
+   FIGURE BUILDER  (모듈형 인체)
+═══════════════════════════════════════════════ */
+function makeFigure(cfg={}){
+  const g  = new THREE.Group();
+  const h  = cfg.height_scale || 1.0;
+  const topCol  = hi(cfg.top_color)    || 0x334466;
+  const botCol  = hi(cfg.bottom_color) || 0x1a2244;
+  const shoeCol = hi(cfg.shoe_color)   || 0x1a1a1a;
+  const hatCol  = hi(cfg.hat_color)    || 0x222222;
+  const bagCol  = hi(cfg.bag_color)    || 0xaa8833;
+  const topType = cfg.top_type    || 'long';        // long | short | tank
+  const botType = cfg.bottom_type || 'long_pants';  // long_pants | shorts | long_skirt | short_skirt
+
+  /* ── SHOES ── */
+  [-1,1].forEach(s=>{
+    const shoe=new THREE.Mesh(new THREE.BoxGeometry(0.17*h,0.1*h,0.32*h),mat(shoeCol,0.5));
+    shoe.position.set(s*0.16*h,0.05*h,0.05*h); g.add(shoe);
+  });
+
+  /* ── LOWER BODY ── */
+  if(botType==='long_skirt'){
+    const sk=new THREE.Mesh(new THREE.CylinderGeometry(0.3*h,0.42*h,0.72*h,16),mat(botCol));
+    sk.position.y=0.46*h; g.add(sk);
+  } else if(botType==='short_skirt'){
+    const sk=new THREE.Mesh(new THREE.CylinderGeometry(0.28*h,0.38*h,0.3*h,16),mat(botCol));
+    sk.position.y=0.67*h; g.add(sk);
+    [-1,1].forEach(s=>{
+      const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.1*h,0.09*h,0.5*h,8),mat(SKIN));
+      leg.position.set(s*0.16*h,0.27*h,0); g.add(leg);
+    });
+  } else {
+    const upperMat=mat(botCol), lowerMat=botType==='shorts'?mat(SKIN):mat(botCol);
+    [-1,1].forEach(s=>{
+      const ul=new THREE.Mesh(new THREE.CylinderGeometry(0.14*h,0.12*h,0.32*h,8),upperMat.clone());
+      ul.position.set(s*0.16*h,0.62*h,0); g.add(ul);
+      const ll=new THREE.Mesh(new THREE.CylinderGeometry(0.11*h,0.10*h,0.38*h,8),lowerMat.clone());
+      ll.position.set(s*0.16*h,0.24*h,0); g.add(ll);
+    });
+  }
+
+  /* ── TORSO ── */
+  const torso=new THREE.Mesh(new THREE.BoxGeometry(0.56*h,0.54*h,0.3*h),mat(topCol));
+  torso.position.y=1.07*h; g.add(torso);
+
+  /* ── ARMS ── */
+  [-1,1].forEach(s=>{
+    const uMat = topType==='tank' ? mat(SKIN) : mat(topCol);
+    const lMat = topType==='long' ? mat(topCol) : mat(SKIN);
+    const ua=new THREE.Mesh(new THREE.CylinderGeometry(0.1*h,0.09*h,0.3*h,8),uMat.clone());
+    ua.position.set(s*0.36*h,1.1*h,0); ua.rotation.z=s*0.28; g.add(ua);
+    const la=new THREE.Mesh(new THREE.CylinderGeometry(0.085*h,0.08*h,0.28*h,8),lMat.clone());
+    la.position.set(s*0.44*h,0.82*h,0); la.rotation.z=s*0.18; g.add(la);
+    const hd=new THREE.Mesh(new THREE.SphereGeometry(0.085*h,8,8),mat(SKIN));
+    hd.position.set(s*0.49*h,0.66*h,0); g.add(hd);
+  });
+
+  /* ── NECK ── */
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.1*h,0.11*h,0.18*h,8),mat(SKIN));
+  neck.position.y=1.42*h; g.add(neck);
+
+  /* ── HEAD ── */
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.28*h,16,16),mat(SKIN));
+  head.position.y=1.72*h; g.add(head);
+
+  /* ── 캡모자 ── */
+  if(cfg.hat==='cap'){
+    const crown=new THREE.Mesh(new THREE.CylinderGeometry(0.27*h,0.3*h,0.22*h,14),mat(hatCol));
+    crown.position.y=2.04*h; g.add(crown);
+    const brim=new THREE.Mesh(new THREE.CylinderGeometry(0.43*h,0.43*h,0.05*h,16),mat(hatCol));
+    brim.position.set(0.06*h,1.94*h,0.1*h); g.add(brim);
+  }
+  /* ── 비니 ── */
+  else if(cfg.hat==='beanie'){
+    const bn=new THREE.Mesh(
+      new THREE.SphereGeometry(0.32*h,16,12,0,Math.PI*2,0,Math.PI*0.62),mat(hatCol));
+    bn.position.y=1.82*h; g.add(bn);
+    const band=new THREE.Mesh(new THREE.CylinderGeometry(0.31*h,0.31*h,0.1*h,14),mat(hatCol,0.8));
+    band.position.y=1.67*h; g.add(band);
+  }
+
+  /* ── 마스크 ── */
+  if(cfg.mask){
+    const mk=new THREE.Mesh(new THREE.BoxGeometry(0.46*h,0.22*h,0.13*h),mat(0xeeeeee,0.5));
+    mk.position.set(0,1.58*h,0.22*h); g.add(mk);
+    const wire=new THREE.Mesh(new THREE.BoxGeometry(0.18*h,0.025*h,0.04*h),mat(0x999999,0.3,0.6));
+    wire.position.set(0,1.68*h,0.27*h); g.add(wire);
+  }
+
+  /* ── 안경 ── */
+  if(cfg.glasses){
+    const gc=cfg.glasses==='sunglasses'?0x111111:0xbbbbbb;
+    const gm=mat(gc,0.3,cfg.glasses==='sunglasses'?0.1:0.7);
+    [-0.13,0.13].forEach(x=>{
+      const lens=new THREE.Mesh(new THREE.TorusGeometry(0.09*h,0.015*h,8,16),gm.clone());
+      lens.position.set(x*h,1.74*h,0.26*h); g.add(lens);
+      if(cfg.glasses==='sunglasses'){
+        const fill=new THREE.Mesh(new THREE.CircleGeometry(0.09*h,16),mat(0x111111,0.2));
+        fill.position.set(x*h,1.74*h,0.261*h); g.add(fill);
+      }
+    });
+    const br=new THREE.Mesh(new THREE.BoxGeometry(0.1*h,0.012*h,0.012*h),gm.clone());
+    br.position.set(0,1.74*h,0.265*h); g.add(br);
+  }
+
+  /* ── 가방 ── */
+  const bagType = cfg.bag_type || (cfg.holding==='bag'?'handbag':null);
+  if(bagType){
+    const bm=mat(bagCol,0.6);
+    if(bagType==='backpack'){
+      const bp=new THREE.Mesh(new THREE.BoxGeometry(0.42*h,0.5*h,0.22*h),bm.clone());
+      bp.position.set(0,1.05*h,-0.27*h); g.add(bp);
+      [-0.12,0.12].forEach(x=>{
+        const st=new THREE.Mesh(new THREE.BoxGeometry(0.06*h,0.54*h,0.04*h),mat(bagCol-0x111111));
+        st.position.set(x*h,1.08*h,-0.08*h); g.add(st);
+      });
+    } else if(bagType==='crossbody'){
+      const cb=new THREE.Mesh(new THREE.BoxGeometry(0.26*h,0.22*h,0.1*h),bm.clone());
+      cb.position.set(0.44*h,0.9*h,0.04*h); g.add(cb);
+      const st=new THREE.Mesh(new THREE.BoxGeometry(0.04*h,0.58*h,0.03*h),bm.clone());
+      st.position.set(0.28*h,1.12*h,0); st.rotation.z=-0.36; g.add(st);
+    } else if(bagType==='handbag'){
+      const hb=new THREE.Mesh(new THREE.BoxGeometry(0.28*h,0.24*h,0.14*h),bm.clone());
+      hb.position.set(0.48*h,0.74*h,0); g.add(hb);
+      for(let i=0;i<8;i++){
+        const a=Math.PI*i/7;
+        const seg=new THREE.Mesh(new THREE.SphereGeometry(0.022*h,6,6),bm.clone());
+        seg.position.set(0.48*h+Math.cos(a)*0.1*h,0.87*h+Math.sin(a)*0.08*h,0); g.add(seg);
+      }
+    } else if(bagType==='shopping_bag'){
+      const sb=new THREE.Mesh(new THREE.BoxGeometry(0.24*h,0.36*h,0.16*h),bm.clone());
+      sb.position.set(0.48*h,0.65*h,0); g.add(sb);
+      for(let i=0;i<8;i++){
+        const a=Math.PI*i/7;
+        const seg=new THREE.Mesh(new THREE.SphereGeometry(0.02*h,6,6),bm.clone());
+        seg.position.set(0.48*h+Math.cos(a)*0.09*h,0.86*h+Math.sin(a)*0.07*h,0); g.add(seg);
+      }
+    }
+  }
+
+  /* ── 그림자 ── */
+  const sh=new THREE.Mesh(new THREE.CircleGeometry(0.5*h,20),
+    new THREE.MeshBasicMaterial({color:0,transparent:true,opacity:.2}));
+  sh.rotation.x=-Math.PI/2; sh.position.y=0.01; g.add(sh);
+
+  return g;
+}
+
+/* ═══════════════════════════════════════════════
+   PROP BUILDERS
+═══════════════════════════════════════════════ */
+function makeStore(){
+  const g=new THREE.Group();
+  const b=new THREE.Mesh(new THREE.BoxGeometry(5,3.2,3.4),mat(0x1e2d3d,0.9));
+  b.position.y=1.6; g.add(b);
+  const sign=new THREE.Mesh(new THREE.BoxGeometry(5.1,0.65,0.18),mat(0x3ecfb4,0.4));
+  sign.position.set(0,3.0,1.75); g.add(sign);
+  const door=new THREE.Mesh(new THREE.BoxGeometry(1.2,2.1,0.1),mat(0x0d1520,0.9));
+  door.position.set(0,1.05,1.72); g.add(door);
+  return g;
+}
+
+function makeCar(color=0x2e3f58){
+  const g=new THREE.Group();
+  const m=mat(color,0.45,0.35);
+  const base=new THREE.Mesh(new THREE.BoxGeometry(3.7,0.9,1.75),m.clone());
+  base.position.y=0.7; g.add(base);
+  const top=new THREE.Mesh(new THREE.BoxGeometry(2.1,0.8,1.55),m.clone());
+  top.position.set(-0.1,1.4,0); g.add(top);
+  const wm=mat(0x111418,0.5);
+  [[1.1,.72],[1.1,-.72],[-1.1,.72],[-1.1,-.72]].forEach(([x,z])=>{
+    const wn=new THREE.Mesh(new THREE.CylinderGeometry(.38,.38,.28,14),wm.clone());
+    wn.rotation.x=Math.PI/2; wn.position.set(x,.42,z); g.add(wn);
+  });
+  // 앞유리
+  const ws=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.6,1.4),mat(0x88aacc,0.2));
+  ws.position.set(1.28,1.24,0); ws.rotation.z=-0.35; g.add(ws);
+  return g;
+}
+
+function makeTaxi(){
+  const g=makeCar(0xe8c030);
+  const sign=new THREE.Mesh(new THREE.BoxGeometry(0.56,0.22,0.28),mat(0x111111,0.5));
+  sign.position.set(0,2.04,0); g.add(sign);
+  return g;
+}
+
+function makeTree(){
+  const g=new THREE.Group();
+  const tr=new THREE.Mesh(new THREE.CylinderGeometry(.16,.22,1.4,8),mat(0x4a3826,0.9));
+  tr.position.y=.7; g.add(tr);
+  const lf=new THREE.Mesh(new THREE.ConeGeometry(1.0,2.1,10),mat(0x2a5230,0.8));
+  lf.position.y=2.2; g.add(lf);
+  return g;
+}
+
+function makeStreetlight(){
+  const g=new THREE.Group();
+  const p=new THREE.Mesh(new THREE.CylinderGeometry(.07,.1,4,8),mat(0x3a454f,0.5,0.3));
+  p.position.y=2; g.add(p);
+  const lamp=new THREE.Mesh(new THREE.SphereGeometry(.26,12,12),
+    mat(0xffe9a0,0.4)); lamp.material.emissive=new THREE.Color(0xffc850);
+    lamp.material.emissiveIntensity=0.9;
+  lamp.position.y=4.1; g.add(lamp);
+  const pl=new THREE.PointLight(0xffd98a,.65,11);
+  pl.position.y=4.1; g.add(pl);
+  return g;
+}
+
+function makeBench(){
+  const g=new THREE.Group();
+  const seat=new THREE.Mesh(new THREE.BoxGeometry(1.6,.1,.6),mat(0x7a5c3a,0.8));
+  seat.position.y=.7; g.add(seat);
+  const back=new THREE.Mesh(new THREE.BoxGeometry(1.6,.5,.08),mat(0x7a5c3a,0.8));
+  back.position.set(0,.95,-.26); g.add(back);
+  [[.7,0],[-.7,0]].forEach(([x])=>{
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(.08,.7,.08),mat(0x555f6a,0.5));
+    leg.position.set(x,.35,0); g.add(leg);
+  });
+  return g;
+}
+
+function makeBusStop(){
+  const g=new THREE.Group();
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(.06,.07,3.5,8),mat(0x4a5560,0.4,0.3));
+  pole.position.y=1.75; g.add(pole);
+  const sign=new THREE.Mesh(new THREE.BoxGeometry(.5,.35,.05),mat(0x1a6ab5,0.4));
+  sign.position.set(0,3.6,.05); g.add(sign);
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(2.6,.12,1.2),mat(0x3a5070,0.6));
+  roof.position.set(0,3.3,-.3); g.add(roof);
+  return g;
+}
+
+function makeAtm(){
+  const g=new THREE.Group();
+  const box=new THREE.Mesh(new THREE.BoxGeometry(.9,1.9,.7),mat(0x2a3a4a,0.5,0.3));
+  box.position.y=.95; g.add(box);
+  const screen=new THREE.Mesh(new THREE.BoxGeometry(.5,.5,.05),mat(0x1a6ab5,0.4));
+  screen.material.emissive=new THREE.Color(0x0a3060); screen.material.emissiveIntensity=0.7;
+  screen.position.set(0,1.2,.38); g.add(screen);
+  return g;
+}
+
+function makeAlleyWall(){
+  const g=new THREE.Group();
+  const w=new THREE.Mesh(new THREE.BoxGeometry(8,.2,3),mat(0x1a2230,0.95));
+  w.position.set(0,1.5,-1.5); w.rotation.x=Math.PI/2; g.add(w);
+  return g;
+}
+
+/* ── 울타리 ── */
+function makeFence(){
+  const g=new THREE.Group();
+  const pm=mat(0x5a3e28,0.8);
+  const r1=new THREE.Mesh(new THREE.BoxGeometry(5.0,.08,.08),pm.clone());
+  r1.position.y=0.9; g.add(r1);
+  const r2=new THREE.Mesh(new THREE.BoxGeometry(5.0,.08,.08),pm.clone());
+  r2.position.y=0.5; g.add(r2);
+  [-2.2,-1.1,0,1.1,2.2].forEach(x=>{
+    const p=new THREE.Mesh(new THREE.BoxGeometry(.12,1.2,.12),pm.clone());
+    p.position.set(x,0.6,0); g.add(p);
+  });
+  return g;
+}
+
+/* ── 횡단보도 ── */
+function makeCrosswalk(){
+  const g=new THREE.Group();
+  for(let i=0;i<5;i++){
+    const s=new THREE.Mesh(new THREE.BoxGeometry(3.0,.02,.44),mat(0xffffff,0.9));
+    s.position.set(0,.01,i*.88-1.76); g.add(s);
+  }
+  return g;
+}
+
+/* ═══════════════════════════════════════════════
+   VEHICLE BUILDERS
+═══════════════════════════════════════════════ */
+/* ── 자전거 ── */
+function makeBicycle(color=0x5588cc){
+  const g=new THREE.Group();
+  const wm=mat(0x222222,0.5);
+  [-0.82,0.82].forEach(x=>{
+    const wheel=new THREE.Mesh(new THREE.TorusGeometry(.42,.07,8,20),wm.clone());
+    wheel.rotation.y=Math.PI/2; wheel.position.set(x,.42,0); g.add(wheel);
+    for(let i=0;i<6;i++){
+      const a=Math.PI*2*i/6;
+      const sp=new THREE.Mesh(new THREE.BoxGeometry(.025,.78,.02),mat(0x444444,0.5));
+      sp.rotation.z=a; sp.position.set(x,.42,0); g.add(sp);
+    }
+  });
+  addTube(g,0,.42,0,  0,.96,0,  .042,hi('#'+color.toString(16).padStart(6,'0')));
+  addTube(g,0,.96,0,  .82,.9,0, .038,hi('#'+color.toString(16).padStart(6,'0')));
+  addTube(g,.38,.42,0, .82,.9,0, .038,hi('#'+color.toString(16).padStart(6,'0')));
+  addTube(g,-.82,.42,0, 0,.54,0, .036,hi('#'+color.toString(16).padStart(6,'0')));
+  addTube(g,-.82,.42,0, 0,.96,0, .036,hi('#'+color.toString(16).padStart(6,'0')));
+  // 안장
+  const seat=new THREE.Mesh(new THREE.BoxGeometry(.3,.06,.14),mat(0x111111,0.6));
+  seat.position.set(-.04,1.01,0); g.add(seat);
+  // 핸들바
+  const hb=new THREE.Mesh(new THREE.BoxGeometry(.06,.06,.46),mat(0x888888,0.3,0.6));
+  hb.position.set(.82,1.0,0); g.add(hb);
+  return g;
+}
+
+/* ── 오토바이 ── */
+function makeMotorcycle(color=0x222222){
+  const g=new THREE.Group();
+  const wm=mat(0x111111,0.4);
+  [-1.1,1.1].forEach(x=>{
+    const w=new THREE.Mesh(new THREE.TorusGeometry(.5,.12,10,24),wm.clone());
+    w.rotation.y=Math.PI/2; w.position.set(x,.5,0); g.add(w);
+  });
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.6,.6,.6),mat(color,0.3,0.4));
+  body.position.set(0,.7,0); g.add(body);
+  const tank=new THREE.Mesh(new THREE.BoxGeometry(.8,.3,.5),mat(color,0.3,0.4));
+  tank.position.set(.1,1.08,0); g.add(tank);
+  const seat=new THREE.Mesh(new THREE.BoxGeometry(.7,.08,.38),mat(0x111111,0.6));
+  seat.position.set(-.2,1.24,0); g.add(seat);
+  const ex=new THREE.Mesh(new THREE.CylinderGeometry(.07,.05,.9,8),mat(0x999999,0.2,0.8));
+  ex.rotation.z=Math.PI/2; ex.position.set(-.6,.55,.36); g.add(ex);
+  const hb=new THREE.Mesh(new THREE.BoxGeometry(.06,.06,.7),mat(0x888888,0.2,0.7));
+  hb.position.set(1.0,1.2,0); g.add(hb);
+  return g;
+}
+
+/* ── 킥보드(전동 스쿠터) ── */
+function makeScooter(color=0x4488cc){
+  const g=new THREE.Group();
+  const wm=mat(0x222222,0.5);
+  [-0.55,0.55].forEach(x=>{
+    const w=new THREE.Mesh(new THREE.TorusGeometry(.22,.07,8,16),wm.clone());
+    w.rotation.y=Math.PI/2; w.position.set(x,.22,0); g.add(w);
+  });
+  const deck=new THREE.Mesh(new THREE.BoxGeometry(1.1,.08,.22),mat(color,0.3,0.2));
+  deck.position.y=.3; g.add(deck);
+  const stem=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,.88,8),mat(color,0.3,0.2));
+  stem.position.set(.48,.72,0); stem.rotation.z=.18; g.add(stem);
+  const hb=new THREE.Mesh(new THREE.BoxGeometry(.06,.06,.5),mat(0x888888,0.2,0.7));
+  hb.position.set(.62,1.12,0); g.add(hb);
+  return g;
+}
+
+/* ── 버스 ── */
+function makeBus(color=0xe8c030){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(7,3,2.6),mat(color,0.7));
+  body.position.y=1.7; g.add(body);
+  const front=new THREE.Mesh(new THREE.BoxGeometry(.3,2.8,2.4),mat(0x222222,0.8));
+  front.position.set(3.65,1.65,0); g.add(front);
+  const ws=new THREE.Mesh(new THREE.BoxGeometry(.15,1.1,1.8),mat(0x88aacc,0.2));
+  ws.position.set(3.68,2.0,0); g.add(ws);
+  [-2.2,-.7,.8,2.3].forEach(x=>{
+    const wn=new THREE.Mesh(new THREE.BoxGeometry(.8,.8,.1),mat(0x88aacc,0.2));
+    wn.position.set(x,2.2,1.35); g.add(wn);
+    const wr=wn.clone(); wr.position.z=-1.35; g.add(wr);
+  });
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(7.1,.15,2.7),mat(color-0x111111,0.8));
+  roof.position.y=3.22; g.add(roof);
+  const wm=mat(0x111111,0.5);
+  [[-2.4,1],[-2.4,-1],[2.4,1],[2.4,-1]].forEach(([x,z])=>{
+    const wl=new THREE.Mesh(new THREE.CylinderGeometry(.52,.52,.32,14),wm.clone());
+    wl.rotation.x=Math.PI/2; wl.position.set(x,.52,z*1.1); g.add(wl);
+  });
+  return g;
+}
+
+/* ── 트럭 ── */
+function makeTruck(color=0x5577aa){
+  const g=new THREE.Group();
+  const cab=new THREE.Mesh(new THREE.BoxGeometry(2.2,2.6,2.4),mat(color,0.5,0.2));
+  cab.position.set(2.2,1.4,0); g.add(cab);
+  const ws=new THREE.Mesh(new THREE.BoxGeometry(.1,1.0,1.8),mat(0x88aacc,0.2));
+  ws.position.set(3.25,1.9,0); g.add(ws);
+  const cargo=new THREE.Mesh(new THREE.BoxGeometry(4.5,2.8,2.4),mat(0xdddddd,0.8));
+  cargo.position.set(-.8,1.6,0); g.add(cargo);
+  const wm=mat(0x111111,0.5);
+  [[-1.8,.9],[-1.8,-.9],[1.8,.9],[1.8,-.9],[2.8,.9],[2.8,-.9]].forEach(([x,z])=>{
+    const wl=new THREE.Mesh(new THREE.CylinderGeometry(.55,.55,.34,14),wm.clone());
+    wl.rotation.x=Math.PI/2; wl.position.set(x,.55,z*1.0); g.add(wl);
+  });
+  [-.5,.5].forEach(z=>{
+    const ex=new THREE.Mesh(new THREE.CylinderGeometry(.08,.1,1.4,8),mat(0x555555,0.3,0.5));
+    ex.position.set(1.3,2.6,z); g.add(ex);
+  });
+  return g;
+}
+
+/* ─ PROP & VEHICLE REGISTRY ─ */
+const PROP_MAKERS = {
+  store:       makeStore,
+  car:         ()=>makeCar(),
+  taxi:        makeTaxi,
+  bus:         ()=>makeBus(),
+  truck:       ()=>makeTruck(),
+  bicycle:     ()=>makeBicycle(),
+  motorcycle:  ()=>makeMotorcycle(),
+  scooter:     makeScooter,
+  tree:        makeTree,
+  streetlight: makeStreetlight,
+  bench:       makeBench,
+  bus_stop:    makeBusStop,
+  atm:         makeAtm,
+  wall:        makeAlleyWall,
+  fence:       makeFence,
+  crosswalk:   makeCrosswalk,
+};
+
+/* ═══════════════════════════════════════════════
+   LABEL + ARROW
+═══════════════════════════════════════════════ */
+function makeLabel(text,color){
+  const cv=document.createElement('canvas'); cv.width=256; cv.height=72;
+  const x=cv.getContext('2d');
+  function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+  x.fillStyle='rgba(8,12,18,.9)'; rr(x,6,6,244,54,7); x.fill();
+  x.strokeStyle=color; x.lineWidth=2; rr(x,6,6,244,54,7); x.stroke();
+  x.fillStyle='#fff'; x.font='600 28px Inter,system-ui,sans-serif';
+  x.textAlign='center'; x.textBaseline='middle'; x.fillText(text,128,36);
+  const tex=new THREE.CanvasTexture(cv);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false}));
+  sp.scale.set(2.3,.65,1); sp.position.y=3.0; return sp;
+}
+
+function makeArrow(x1,z1,x2,z2,color){
+  const dir=new THREE.Vector3(x2-x1,0,z2-z1).normalize();
+  const len=Math.hypot(x2-x1,z2-z1);
+  return new THREE.ArrowHelper(dir,new THREE.Vector3(x1,.15,z1),len,new THREE.Color(color),.6,.35);
+}
+
+/* ═══════════════════════════════════════════════
+   SCENE APPLY
+═══════════════════════════════════════════════ */
+const LOC_NAMES={street:'거리',store_front:'편의점 앞',alley:'골목',park:'공원',
+  parking:'주차장',crosswalk:'횡단보도',subway:'지하철역',cafe:'카페'};
+const LOC_GROUND={street:0x111b26,store_front:0x141e28,alley:0x0f141a,
+  park:0x0f1a14,parking:0x161820,crosswalk:0x111b26,subway:0x12121e,cafe:0x1a1614};
+
+function applyScene(s){
+  if(!s) return;
+  if(s.location){
+    document.getElementById('locTag').textContent=LOC_NAMES[s.location]||s.location;
+    const tint=LOC_GROUND[s.location];
+    if(tint!=null) ground.material.color.setHex(tint);
+  }
+  const seenE=new Set(), seenP=new Set();
+
+  // Props
+  (s.props||[]).forEach(p=>{
+    seenP.add(p.id);
+    if(!props.has(p.id)){
+      const mk=PROP_MAKERS[p.kind]; if(!mk) return;
+      const grp=mk();
+      grp.position.set(p.pos[0],0,p.pos[1]);
+      grp.scale.set(.01,.01,.01);
+      scene.add(grp);
+      props.set(p.id,{group:grp,grew:false});
+    }
+    const rec=props.get(p.id);
+    if(rec) rec.group.position.set(p.pos[0],rec.group.position.y,p.pos[1]);
+  });
+
+  // Entities
+  (s.entities||[]).forEach(e=>{
+    seenE.add(e.id);
+    let rec=entities.get(e.id);
+    const kindColor=e.color||KIND_COLOR[e.kind]||'#9aa6b6';
+    const hs=e.height_scale||1.0;
+
+    if(!rec){
+      // Build figure config from entity fields
+      const figCfg={
+        height_scale: hs,
+        top_type:     e.top_type,
+        top_color:    e.top_color,
+        bottom_type:  e.bottom_type,
+        bottom_color: e.bottom_color,
+        hat:          e.hat,
+        hat_color:    e.hat_color,
+        mask:         e.mask,
+        glasses:      e.glasses,
+        shoe_color:   e.shoe_color,
+        bag_type:     e.bag_type||(e.holding==='bag'?'handbag':null),
+        bag_color:    e.bag_color,
+        holding:      e.holding,
+      };
+      const group=makeFigure(figCfg);
+      if(e.label) group.add(makeLabel(e.label,kindColor));
+      group.position.set(e.pos[0],0,e.pos[1]);
+      group.scale.set(.01,.01,.01);
+      scene.add(group);
+      rec={group,target:{x:e.pos[0],z:e.pos[1]},grew:false,id:e.id};
+      entities.set(e.id,rec);
+    }
+    const prev={x:rec.target.x,z:rec.target.z};
+    rec.target={x:e.pos[0],z:e.pos[1]};
+
+    // Arrow on move
+    const moved=Math.hypot(e.pos[0]-prev.x,e.pos[1]-prev.z)>0.5;
+    if(moved&&rec.grew){
+      const ak=`arr_${e.id}`;
+      if(arrows.has(ak)) scene.remove(arrows.get(ak));
+      const arrow=makeArrow(prev.x,prev.z,e.pos[0],e.pos[1],kindColor);
+      scene.add(arrow); arrows.set(ak,arrow);
+      setTimeout(()=>{if(arrows.has(ak)){scene.remove(arrows.get(ak));arrows.delete(ak);}},4000);
+    }
+  });
+
+  [...entities.keys()].forEach(id=>{if(!seenE.has(id)){scene.remove(entities.get(id).group);entities.delete(id);}});
+  [...props.keys()].forEach(id=>{if(!seenP.has(id)){scene.remove(props.get(id).group);props.delete(id);}});
+
+  updateMontage(s);
+  updateEntityList(s.entities||[]);
+}
+
+function clearScene(){
+  entities.forEach(r=>scene.remove(r.group)); entities.clear();
+  props.forEach(r=>scene.remove(r.group)); props.clear();
+  arrows.forEach(a=>scene.remove(a)); arrows.clear();
+  document.getElementById('locTag').textContent='위치 미상';
+  ground.material.color.setHex(0x111b26);
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  camAngle+=.0014;
+  camera.position.set(Math.sin(camAngle)*30,20,Math.cos(camAngle)*30);
+  camera.lookAt(0,1.4,0);
+  entities.forEach(r=>{
+    r.group.position.x+=(r.target.x-r.group.position.x)*.07;
+    r.group.position.z+=(r.target.z-r.group.position.z)*.07;
+    if(!r.grew){
+      const s=r.group.scale.x+(1-r.group.scale.x)*.13;
+      r.group.scale.set(s,s,s);
+      if(s>.99){r.group.scale.set(1,1,1);r.grew=true;}
+    }
+  });
+  props.forEach(r=>{
+    if(!r.grew){
+      const s=r.group.scale.x+(1-r.group.scale.x)*.13;
+      r.group.scale.set(s,s,s);
+      if(s>.99){r.group.scale.set(1,1,1);r.grew=true;}
+    }
+  });
+  renderer.render(scene,camera);
+}
+
+/* ═══════════════════════════════════════════════
+   CLAUDE API
+═══════════════════════════════════════════════ */
+const SCHEMA_PROMPT = `너는 목격자 진술을 3D 장면 데이터로 변환하는 수사 보조 AI다.
+누적된 모든 진술을 종합하여 현재 장면의 완전한 상태를 JSON으로 출력한다.
+
+출력 스키마(JSON만, 설명·코드펜스 금지):
+{
+  "location": "street|store_front|alley|park|parking|crosswalk|subway|cafe",
+  "time_of_day": "day|night|dawn|dusk",
+  "entities": [{
+    "id": "고유ID",
+    "kind": "suspect|victim|bystander|officer",
+    "label": "짧은한글",
+    "color": "#hex(피부색아님, 상의색 기반)",
+    "height_scale": 1.0,
+    "pos": [x, z],
+    "top_type": "long|short|tank",
+    "top_color": "#hex",
+    "bottom_type": "long_pants|shorts|long_skirt|short_skirt",
+    "bottom_color": "#hex",
+    "hat": "cap|beanie|null",
+    "hat_color": "#hex|null",
+    "mask": true|false,
+    "glasses": "sunglasses|glasses|null",
+    "shoe_color": "#hex",
+    "bag_type": "backpack|crossbody|handbag|shopping_bag|null",
+    "bag_color": "#hex|null"
+  }],
+  "props": [{"id":"고유ID","kind":"store|car|taxi|bus|truck|bicycle|motorcycle|scooter|tree|streetlight|bench|bus_stop|atm|wall|fence|crosswalk","pos":[x,z]}],
+  "key_event": "이번 진술에서 일어난 핵심 사건 한 문장",
+  "suspect_info": {
+    "height": "tall|medium|short|unknown",
+    "build": "체형 or null",
+    "clothing_top": "상의 설명 or null",
+    "clothing_bottom": "하의 설명 or null",
+    "face": "얼굴 특징 or null",
+    "other": "기타 or null"
+  },
+  "contradiction": "이전 진술과 모순되는 내용 or null"
+}
+
+규칙:
+- 좌표: -11 ~ 11 범위. 도주 방향은 원점에서 멀어지도록.
+- 같은 인물은 항상 같은 id 유지.
+- height_scale: 키큰=1.3, 보통=1.0, 작은=0.8
+- top_color은 진술의 옷 색상 반영(검은 옷→#1a1a1a, 흰옷→#eeeeee 등)
+- JSON만 출력.`;
+
+async function statementToScene(transcript){
+  if(!API_KEY) throw new Error('no_key');
+  const res=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1400,
+      messages:[{role:"user",content:SCHEMA_PROMPT+"\n\n[누적 진술]\n"+transcript+"\n\n[JSON]"}]})
+  });
+  if(!res.ok) throw new Error("API "+res.status);
+  const data=await res.json();
+  let txt=(data.content||[]).map(b=>b.text||"").join("").trim();
+  txt=txt.replace(/```json/gi,"").replace(/```/g,"").trim();
+  const a=txt.indexOf("{"),b=txt.lastIndexOf("}");
+  if(a>=0&&b>=0) txt=txt.slice(a,b+1);
+  return JSON.parse(txt);
+}
+
+async function generateReport(all){
+  if(!API_KEY) throw new Error("API 키 필요");
+  const res=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",
+      content:`다음 사건 목격자 진술 기록을 수사 보고서 형식으로 요약해줘.\n[진술 기록]\n${all}\n\nJSON으로만 출력:\n{"case_summary":"","suspect_profile":"","timeline":[],"key_evidence":[],"recommendation":""}`}]})
+  });
+  if(!res.ok) throw new Error("API "+res.status);
+  const data=await res.json();
+  let txt=(data.content||[]).map(b=>b.text||"").join("").trim();
+  txt=txt.replace(/```json/gi,"").replace(/```/g,"").trim();
+  const a=txt.indexOf("{"),b=txt.lastIndexOf("}");
+  if(a>=0&&b>=0) txt=txt.slice(a,b+1);
+  return JSON.parse(txt);
+}
+
+/* ═══════════════════════════════════════════════
+   KEYWORD FALLBACK (API 없을 때 즉시 재현)
+═══════════════════════════════════════════════ */
+const fbS = {
+  location:'street',
+  entities:{},
+  props:{},
+  si:{height:'unknown',build:null,clothing_top:null,clothing_bottom:null,face:null,other:null}
+};
+
+function kw(text){ return t=>new RegExp(t).test(text); }
+
+function keywordScene(sentence, all){
+  const t=all.toLowerCase();
+  const K=kw(t);
+
+  /* 장소 */
+  if(K('편의점|슈퍼|마트'))       fbS.location='store_front';
+  else if(K('골목'))              fbS.location='alley';
+  else if(K('주차장'))            fbS.location='parking';
+  else if(K('공원'))              fbS.location='park';
+  else if(K('횡단보도|신호등'))   fbS.location='crosswalk';
+  else if(K('카페|커피'))         fbS.location='cafe';
+  else if(K('지하철'))            fbS.location='subway';
+
+  /* 소품/교통 */
+  function addProp(id,kind,pos){ if(!fbS.props[id]) fbS.props[id]={id,kind,pos}; }
+  if(K('편의점|가게|슈퍼'))        addProp('store','store',[0,-6]);
+  if(K('가로등'))                  addProp('sl','streetlight',[-7,-2]);
+  if(K('벤치'))                    addProp('bench','bench',[3,3]);
+  if(K('울타리|담장'))             addProp('fence','fence',[-4,2]);
+  if(K('횡단보도'))                addProp('xwalk','crosswalk',[0,3]);
+  if(K('자전거'))                  addProp('bike','bicycle',[3,0]);
+  if(K('오토바이|모터'))           addProp('moto','motorcycle',[4,1]);
+  if(K('킥보드|전동'))             addProp('scoot','scooter',[2,1]);
+  if(K('버스(?!정류)'))            addProp('bus','bus',[5,0]);
+  if(K('버스정류|정류장'))         addProp('busstop','bus_stop',[6,-4]);
+  if(K('트럭|화물차'))             addProp('truck','truck',[5,-1]);
+  if(K('택시'))                    addProp('taxi','taxi',[4,-2]);
+  else if(K('자동차|차량|차가|승용차')) addProp('car','car',[4,-2]);
+  if(K('나무'))                    addProp('tree','tree',[-7,-5]);
+  if(K('atm|현금기|현금지급기'))   addProp('atm','atm',[-4,-5]);
+
+  /* 용의자 인상착의 */
+  const si=fbS.si;
+  if(K('키 큰|크고|장신'))          si.height='tall';
+  else if(K('키 작|작고|단신'))     si.height='short';
+  else if(K('보통 키|중간 키'))     si.height='medium';
+
+  // 상의
+  let topType='long', topColor='#334466';
+  if(K('나시|민소매|탱크탑'))           { topType='tank'; }
+  else if(K('반팔'))                    { topType='short'; }
+  if(K('검은 후드|검정 후드'))          { topColor='#1a1a1a'; si.clothing_top='검은 후드티'; }
+  else if(K('흰 후드|하얀 후드'))       { topColor='#eeeeee'; si.clothing_top='흰 후드티'; }
+  else if(K('회색 패딩'))              { topColor='#888888'; si.clothing_top='회색 패딩'; }
+  else if(K('빨간|빨강'))              { topColor='#cc2222'; si.clothing_top='빨간 상의'; }
+  else if(K('파란|파랑'))              { topColor='#2244cc'; si.clothing_top='파란 상의'; }
+  else if(K('노란|노랑'))              { topColor='#ccaa00'; si.clothing_top='노란 상의'; }
+  else if(K('초록|녹색'))             { topColor='#226622'; si.clothing_top='초록 상의'; }
+  else if(K('흰|하얀'))               { topColor='#dddddd'; si.clothing_top='흰 상의'; }
+  else if(K('검은|검정|블랙'))         { topColor='#1a1a1a'; si.clothing_top='검은 상의'; }
+
+  // 하의
+  let botType='long_pants', botColor='#1a2244';
+  if(K('짧은 치마|미니스커트|짧은치마'))   { botType='short_skirt'; }
+  else if(K('긴 치마|롱스커트|긴치마'))    { botType='long_skirt'; }
+  else if(K('반바지|쇼츠'))              { botType='shorts'; }
+  if(K('청바지'))                        { botColor='#1e44aa'; si.clothing_bottom='청바지'; }
+  else if(K('검은 바지|검정 바지'))       { botColor='#111111'; si.clothing_bottom='검은 바지'; }
+  else if(K('회색 바지'))                { botColor='#888888'; si.clothing_bottom='회색 바지'; }
+  else if(K('베이지|카키'))             { botColor='#aa9966'; si.clothing_bottom='베이지 바지'; }
+
+  // 모자, 마스크, 안경
+  let hat=null, mask=false, glasses=null;
+  if(K('캡모자|야구모자'))   hat='cap';
+  else if(K('비니|털모자'))  hat='beanie';
+  if(K('마스크'))           { mask=true; si.face=(si.face||'')+' 마스크'; }
+  if(K('선글라스'))          glasses='sunglasses';
+  else if(K('안경'))         glasses='glasses';
+  if(K('문신|타투'))         si.other='문신 있음';
+  if(K('뚱뚱|통통'))         si.build='통통한 체형';
+  else if(K('마른|날씬'))    si.build='마른 체형';
+  else if(K('건장|근육'))    si.build='건장한 체형';
+
+  // 신발
+  let shoeCol='#1a1a1a';
+  if(K('흰 신발|흰 운동화')) shoeCol='#eeeeee';
+  else if(K('빨간 신발'))    shoeCol='#cc2222';
+
+  /* 인물 좌표 및 이동 */
+  function getPos(id, defaultPos){
+    return fbS.entities[id]?.pos || defaultPos;
+  }
+
+  // 용의자
+  if(K('남자|남성|용의자|범인|도둑|강도|피의자')){
+    let pos=getPos('sus',[-2,-2]);
+    if(K('골목.*뛰|뛰.*골목|골목.*도망|도주.*골목')) pos=[-9,5];
+    else if(K('주차장.*도망|차.*타고|도주.*차'))      pos=[9,7];
+    else if(K('접근|다가|달려들'))                   {
+      const v=fbS.entities['vic']; if(v) pos=[v.pos[0]-.8,v.pos[1]];
+    }
+    // 가방 빼앗기 여부
+    const hasBag = K('가방.*빼앗|낚아채|탈취|훔쳐|뺐') ? 'handbag' : (fbS.entities['sus']?.bag_type||null);
+    fbS.entities['sus']={id:'sus',kind:'suspect',label:'용의자',color:topColor,
+      height_scale:si.height==='tall'?1.3:si.height==='short'?0.8:1.0,
+      pos, top_type:topType, top_color:topColor,
+      bottom_type:botType, bottom_color:botColor,
+      hat, mask, glasses, shoe_color:shoeCol, bag_type:hasBag};
+  }
+
+  // 피해자
+  if(K('여자|여성|피해자|아가씨')){
+    const susHasBag = K('가방.*빼앗|낚아채|탈취');
+    fbS.entities['vic']={id:'vic',kind:'victim',label:'피해자',color:'#3ecfb4',
+      height_scale:1.0, pos:getPos('vic',[2,-2]),
+      top_type:'short', top_color:'#3ecfb4',
+      bottom_type:'long_pants', bottom_color:'#1a2244',
+      hat:null, mask:false, glasses:null, shoe_color:'#333333',
+      bag_type:(!susHasBag&&K('가방'))?'handbag':null};
+  }
+
+  // 경찰
+  if(K('경찰|형사|수사관')){
+    fbS.entities['off']={id:'off',kind:'officer',label:'경찰',color:'#f5c842',
+      height_scale:1.05, pos:getPos('off',[5,1]),
+      top_type:'long', top_color:'#1a3a6a',
+      bottom_type:'long_pants', bottom_color:'#1a2244',
+      hat:null, mask:false, glasses:null, shoe_color:'#111111', bag_type:null};
+  }
+
+  // 목격자
+  if(K('목격자|할머니|행인|아저씨|보행자|시민')){
+    fbS.entities['bys']={id:'bys',kind:'bystander',label:'목격자',color:'#7d90a8',
+      height_scale:0.95, pos:getPos('bys',[-5,3]),
+      top_type:'long', top_color:'#556677',
+      bottom_type:'long_pants', bottom_color:'#334455',
+      hat:null, mask:false, glasses:null, shoe_color:'#333333', bag_type:null};
+  }
+
+  return {
+    location:fbS.location,
+    time_of_day:K('밤|야간|새벽')?'night':K('저녁|황혼')?'dusk':'day',
+    entities:Object.values(fbS.entities),
+    props:Object.values(fbS.props),
+    key_event:sentence.slice(0,50),
+    suspect_info:{...fbS.si},
+    contradiction:null
+  };
+}
+
+/* ═══════════════════════════════════════════════
+   PROCESS STATEMENT
+═══════════════════════════════════════════════ */
+async function processStatement(sentence){
+  if(!sentence.trim()) return;
+  const wit=witnesses.find(w=>w.id===activeWitId);
+  wit.statements.push(sentence.trim());
+  accumulated+=(accumulated?" ":"")+sentence.trim();
+  syncSuspect();   // 3D 용의자 뷰에 진술 전달
+  addLog(sentence.trim(),false,wit.name);
+  addTimelineItem(sentence.trim(),wit.name);
+  applyBuildingMention(sentence.trim());   // 언급된 지도 건물 색칠
+
+  if(!API_KEY){
+    setStatus("키워드 분석 중…",true);
+    const sd=keywordScene(sentence.trim(),accumulated);
+    applyScene(sd);
+    setStatus(`재현 완료 (키워드 모드) · ${sd.entities.length}명 — ⚙ API 키 입력 시 AI 정밀 재현`,false,true);
+    return;
+  }
+  setStatus("AI 분석 중 — 3D 재구성…",true);
+  try{
+    const sd=await statementToScene(accumulated);
+    applyScene(sd);
+    if(sd.contradiction){ contradictions.push(sd.contradiction); showContradiction(sd.contradiction); }
+    setStatus(`재현 완료 · ${(sd.entities||[]).length}명 · ${(sd.props||[]).length}개 객체`,false,true);
+  }catch(err){
+    const sd=keywordScene(sentence.trim(),accumulated);
+    applyScene(sd);
+    setStatus("AI 오류 → 키워드 모드로 재현: "+err.message,false,false);
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   UI
+═══════════════════════════════════════════════ */
+const logEl=document.getElementById('log');
+
+function addLog(text,interim,witName){
+  if(interim){
+    let el=document.getElementById('interimEntry');
+    if(!el){el=document.createElement('div');el.id='interimEntry';el.className='entry interim';logEl.appendChild(el);}
+    el.innerHTML='<span class="t">인식 중…</span>'+text;
+  } else {
+    const old=document.getElementById('interimEntry'); if(old) old.remove();
+    const el=document.createElement('div'); el.className='entry';
+    const ts=new Date().toLocaleTimeString('ko-KR',{hour12:false});
+    const wt=witName?`<span class="wit-tag">${witName}</span>`:'';
+    el.innerHTML=`<span class="t">${ts}</span>${wt}${text}`;
+    logEl.appendChild(el);
+  }
+  logEl.scrollTop=logEl.scrollHeight;
+}
+
+function addTimelineItem(text,witName){
+  const ts=new Date().toLocaleTimeString('ko-KR',{hour12:false,hour:'2-digit',minute:'2-digit'});
+  timelineItems.push({time:ts,event:text.slice(0,60)+(text.length>60?'…':''),witness:witName});
+  renderTimeline();
+}
+function renderTimeline(){
+  const wrap=document.getElementById('timelineItems');
+  if(!timelineItems.length){wrap.innerHTML='<div class="tl-empty">진술이 추가되면 타임라인이 자동으로 생성됩니다</div>';return;}
+  wrap.innerHTML=timelineItems.map((item,i)=>`
+    <div class="tl-item">
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="tl-dot ${i<timelineItems.length-1?'past':''}"></div>
+        ${i<timelineItems.length-1?'<div class="tl-line" style="flex:1;min-height:24px"></div>':''}
+      </div>
+      <div class="tl-info">
+        <div class="tl-time">${item.time}</div>
+        <div class="tl-event">${item.event}</div>
+        <div class="tl-wit">${item.witness}</div>
+      </div>
+    </div>`).join('');
+}
+
+function updateMontage(sd){
+  if(!sd.suspect_info) return;
+  const si=sd.suspect_info;
+  const hasInfo=Object.values(si).some(v=>v&&v!=='unknown'&&v!==null);
+  if(!hasInfo) return;
+  const sus=(sd.entities||[]).find(e=>e.kind==='suspect');
+  const col=sus?.top_color||sus?.color||'#888';
+  const hv={tall:3,medium:2,short:1,unknown:0}[si.height]||0;
+  document.getElementById('montageContent').innerHTML=`
+    <div class="mont-row"><span class="key">키</span>
+      <div class="height-bar">${[1,2,3].map(v=>`<div style="height:${v*12}px" class="${v<=hv?'hi':''}"></div>`).join('')}</div>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--ink2);margin-left:8px">${si.height==='tall'?'큰 키':si.height==='medium'?'보통':si.height==='short'?'작은 키':'미상'}</span>
+    </div>
+    ${si.build?`<div class="mont-row"><span class="key">체형</span><span class="val">${si.build}</span></div>`:''}
+    ${si.clothing_top?`<div class="mont-row"><span class="key">상의</span><span class="val">${si.clothing_top}</span><div class="swatch" style="background:${col}"></div></div>`:''}
+    ${si.clothing_bottom?`<div class="mont-row"><span class="key">하의</span><span class="val">${si.clothing_bottom}</span></div>`:''}
+    ${si.face?`<div class="mont-row"><span class="key">얼굴</span><span class="val">${si.face}</span></div>`:''}
+    ${si.other?`<div class="mont-row"><span class="key">특징</span><span class="val">${si.other}</span></div>`:''}`;
+}
+
+function updateEntityList(el){
+  const div=document.getElementById('entityList');
+  if(!el.length){div.innerHTML='아직 등록된 인물이 없습니다.';return;}
+  div.innerHTML=el.map(e=>{
+    const k={suspect:'용의자',victim:'피해자',bystander:'목격자',officer:'경찰'}[e.kind]||e.kind;
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+      <div style="width:10px;height:10px;border-radius:50%;background:${e.top_color||e.color||KIND_COLOR[e.kind]||'#888'};flex:none"></div>
+      <span style="color:var(--ink);font-weight:600">${e.label||e.id}</span>
+      <span style="color:var(--ink3);font-size:11px">${k}</span>
+    </div>`;
+  }).join('');
+}
+
+function showContradiction(text){
+  setStatus("⚠ 모순 감지: "+text,false,false);
+  const wrap=document.getElementById('reportWrap');
+  const box=document.createElement('div'); box.className='contradiction-box';
+  box.innerHTML=`<div class="lbl">⚠ 모순 감지</div>${text}`;
+  wrap.prepend(box); setTimeout(()=>box.remove(),8000);
+}
+
+function setStatus(txt,busy,ok){
+  document.getElementById('statusTxt').textContent=txt;
+  document.getElementById('statusBar').classList.toggle('busy',!!busy);
+  const pill=document.getElementById('statPill');
+  if(busy){pill.textContent='PROCESSING';pill.className='stat-pill';}
+  else if(ok===true){pill.textContent='LIVE';pill.className='stat-pill ok';}
+  else if(ok===false){pill.textContent='WARN';pill.className='stat-pill warn';}
+  else{pill.textContent='READY';pill.className='stat-pill ok';}
+}
+
+/* ═══════════════════════════════════════════════
+   WITNESS
+═══════════════════════════════════════════════ */
+const witnessRow=document.getElementById('witnessRow');
+const addWitBtn=document.getElementById('addWitBtn');
+function renderWitnesses(){
+  witnessRow.querySelectorAll('.wit-chip:not(.add)').forEach(e=>e.remove());
+  witnesses.forEach(w=>{
+    const chip=document.createElement('button');
+    chip.className='wit-chip'+(w.id===activeWitId?' active':'');
+    chip.textContent=w.name;
+    chip.onclick=()=>{activeWitId=w.id;renderWitnesses();};
+    witnessRow.insertBefore(chip,addWitBtn);
+  });
+  document.getElementById('witCount').textContent=`증인 ${witnesses.length}명`;
+}
+addWitBtn.onclick=()=>{
+  const names=['A','B','C','D','E','F'];
+  const id=Date.now();
+  witnesses.push({id,name:`증인 ${names[witnesses.length]||witnesses.length+1}`,statements:[]});
+  activeWitId=id; renderWitnesses();
+};
+
+/* ═══════════════════════════════════════════════
+   TABS
+═══════════════════════════════════════════════ */
+function syncSuspect(){
+  const f=document.getElementById('suspectFrame');
+  if(f&&f.contentWindow){
+    f.contentWindow.postMessage({type:'apikey',key:API_KEY},'*');
+    if(accumulated) f.contentWindow.postMessage({type:'statement',text:accumulated},'*');
+    f.contentWindow.postMessage({type:'resize'},'*');
+  }
+}
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.onclick=()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab==='suspect') setTimeout(syncSuspect,60);
+  };
+});
+
+/* ═══════════════════════════════════════════════
+   TEXT INPUT
+═══════════════════════════════════════════════ */
+const textIn=document.getElementById('textIn');
+document.getElementById('sendBtn').onclick=()=>{const v=textIn.value;textIn.value='';processStatement(v);};
+textIn.addEventListener('keydown',e=>{if(e.key==='Enter'){const v=textIn.value;textIn.value='';processStatement(v);}});
+
+document.getElementById('resetBtn').onclick=()=>{
+  clearScene();
+  resetBuildingColors();   // 식별된 건물 색 원복 (지도 건물은 유지)
+  accumulated="";
+  Object.keys(fbS.entities).forEach(k=>delete fbS.entities[k]);
+  Object.keys(fbS.props).forEach(k=>delete fbS.props[k]);
+  fbS.location='street';
+  fbS.si={height:'unknown',build:null,clothing_top:null,clothing_bottom:null,face:null,other:null};
+  witnesses.forEach(w=>w.statements=[]);
+  timelineItems=[]; contradictions=[]; currentMontage=null;
+  logEl.querySelectorAll('.entry').forEach(e=>e.remove());
+  document.getElementById('timelineItems').innerHTML='<div class="tl-empty">진술이 추가되면 타임라인이 자동으로 생성됩니다</div>';
+  document.getElementById('montageContent').innerHTML='<div class="montage-empty">진술을 입력하면 용의자 인상착의가 자동 추출됩니다</div>';
+  document.getElementById('reportWrap').innerHTML='<div style="font-size:12px;color:var(--ink3);text-align:center;padding:32px 0;font-style:italic">진술 입력 후 보고서 생성 버튼을 누르세요</div>';
+  setStatus("장면 초기화됨.",false);
+};
+
+/* ═══════════════════════════════════════════════
+   SPEECH INPUT
+═══════════════════════════════════════════════ */
+const micBtn=document.getElementById('micBtn');
+const micLabel=document.getElementById('micLabel');
+const recDot=document.getElementById('recDot');
+let recog=null, listening=false;
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+
+function createRecog(){
+  if(!SR) return null;
+  const r=new SR();
+  r.lang='ko-KR'; r.continuous=false; r.interimResults=true;
+  r.onresult=e=>{
+    let interim="";
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const res=e.results[i];
+      if(res.isFinal) processStatement(res[0].transcript);
+      else interim+=res[0].transcript;
+    }
+    if(interim) addLog(interim,true);
+  };
+  r.onerror=e=>{if(e.error!=='no-speech') setStatus("음성 오류: "+e.error,false,false);scheduleRestart();};
+  r.onend=()=>scheduleRestart();
+  return r;
+}
+let restartTimer=null;
+function scheduleRestart(){
+  if(!listening) return;
+  clearTimeout(restartTimer);
+  restartTimer=setTimeout(()=>{if(!listening)return;recog=createRecog();if(recog)recog.start();},120);
+}
+function startMic(){
+  if(!SR){setStatus("음성 인식 미지원 — Chrome 권장",false);return;}
+  listening=true; recog=createRecog(); if(recog) recog.start();
+  micBtn.classList.add('on'); micLabel.textContent='■ 녹음 중지';
+  recDot.classList.add('live');
+  setStatus("듣는 중 — 진술하세요.",false,true);
+}
+function stopMic(){
+  listening=false; clearTimeout(restartTimer);
+  if(recog){try{recog.stop();}catch(_){} recog=null;}
+  micBtn.classList.remove('on'); micLabel.textContent='🎙 음성 진술 시작';
+  recDot.classList.remove('live');
+  setStatus("음성 인식 중지됨.",false);
+}
+micBtn.onclick=()=>listening?stopMic():startMic();
+
+/* ═══════════════════════════════════════════════
+   SETTINGS (with localStorage)
+═══════════════════════════════════════════════ */
+const overlay=document.getElementById('settingsOverlay');
+document.getElementById('settingsBtn').onclick=()=>overlay.style.display='flex';
+document.getElementById('settingsClose').onclick=()=>overlay.style.display='none';
+document.getElementById('settingsClose2').onclick=()=>overlay.style.display='none';
+document.getElementById('saveApiKey').onclick=()=>{
+  API_KEY=document.getElementById('apiKeyInput').value.trim();
+  try{localStorage.setItem('recon_api_key',API_KEY);}catch(_){}
+  overlay.style.display='none';
+  setStatus("API 키 저장됨.",false,true);
+  syncSuspect();
+};
+try{const s=localStorage.getItem('recon_api_key');if(s){API_KEY=s;document.getElementById('apiKeyInput').value=s;}}catch(_){}
+
+/* ═══════════════════════════════════════════════
+   CAPTURE
+═══════════════════════════════════════════════ */
+document.getElementById('captureBtn').onclick=()=>{
+  renderer.render(scene,camera);
+  const link=document.createElement('a');
+  link.download=`recon_${Date.now()}.png`;
+  link.href=renderer.domElement.toDataURL('image/png');
+  link.click();
+};
+
+/* ═══════════════════════════════════════════════
+   REPORT
+═══════════════════════════════════════════════ */
+document.getElementById('genReportBtn').onclick=async()=>{
+  if(!accumulated.trim()){setStatus("진술이 없습니다.",false);return;}
+  setStatus("보고서 생성 중…",true);
+  try{
+    const r=await generateReport(accumulated);
+    document.getElementById('reportWrap').innerHTML=`
+      <div class="report-section"><h4>사건 개요</h4><p>${r.case_summary||'—'}</p></div>
+      <div class="report-section"><h4>용의자 프로파일</h4><p>${r.suspect_profile||'정보 부족'}</p></div>
+      <div class="report-section"><h4>사건 타임라인</h4><p>${(r.timeline||[]).map((t,i)=>`${i+1}. ${t}`).join('<br>')}</p></div>
+      <div class="report-section"><h4>핵심 증거</h4><p>${(r.key_evidence||[]).map(e=>`• ${e}`).join('<br>')}</p></div>
+      <div class="report-section"><h4>추가 수사 제언</h4><p>${r.recommendation||'—'}</p></div>`;
+    reportText=JSON.stringify(r,null,2);
+    setStatus("보고서 생성 완료",false,true);
+    document.querySelector('[data-tab="report"]').click();
+  }catch(err){setStatus("보고서 생성 실패: "+err.message,false,false);}
+};
+document.getElementById('copyReportBtn').onclick=()=>{
+  if(!reportText){setStatus("보고서를 먼저 생성하세요.",false);return;}
+  navigator.clipboard.writeText(reportText).then(()=>setStatus("보고서 복사 완료!",false,true));
+};
+
+/* ═══════════════════════════════════════════════
+   PRESETS (오프라인)
+═══════════════════════════════════════════════ */
+const PRESETS=[
+  {name:"편의점 가방 탈취 · 4단계", steps:[
+    {line:"밤 11시쯤 편의점 앞에 검은 후드티 차림의 키 큰 남자가 서 있었어요.",
+     scene:{location:"store_front",props:[{id:"store",kind:"store",pos:[0,-6]},{id:"sl",kind:"streetlight",pos:[-7,-2]}],
+       entities:[{id:"sus",kind:"suspect",label:"용의자",color:"#1a1a1a",height_scale:1.3,pos:[-2,-2],
+         top_type:"long",top_color:"#1a1a1a",bottom_type:"long_pants",bottom_color:"#111111",
+         hat:null,mask:false,glasses:null,shoe_color:"#111111",bag_type:null}],
+       key_event:"용의자 등장",suspect_info:{height:"tall",build:null,clothing_top:"검은 후드티",clothing_bottom:null,face:null,other:null},contradiction:null}},
+    {line:"여자가 편의점에서 나왔고, 어깨에 갈색 크로스백을 메고 있었어요.",
+     scene:{location:"store_front",props:[{id:"store",kind:"store",pos:[0,-6]},{id:"sl",kind:"streetlight",pos:[-7,-2]}],
+       entities:[{id:"sus",kind:"suspect",label:"용의자",color:"#1a1a1a",height_scale:1.3,pos:[-2,-2],
+           top_type:"long",top_color:"#1a1a1a",bottom_type:"long_pants",bottom_color:"#111111",hat:null,mask:false,glasses:null,shoe_color:"#111111",bag_type:null},
+         {id:"vic",kind:"victim",label:"피해자",color:"#3ecfb4",height_scale:1.0,pos:[1.5,-3],
+           top_type:"short",top_color:"#3ecfb4",bottom_type:"long_pants",bottom_color:"#2244aa",hat:null,mask:false,glasses:null,shoe_color:"#333333",bag_type:"crossbody",bag_color:"#aa7733"}],
+       key_event:"피해자 등장",suspect_info:{height:"tall",build:null,clothing_top:"검은 후드티",clothing_bottom:null,face:null,other:null},contradiction:null}},
+    {line:"남자가 갑자기 다가가서 여자 가방을 낚아챘어요.",
+     scene:{location:"store_front",props:[{id:"store",kind:"store",pos:[0,-6]},{id:"sl",kind:"streetlight",pos:[-7,-2]}],
+       entities:[{id:"sus",kind:"suspect",label:"용의자",color:"#1a1a1a",height_scale:1.3,pos:[0.5,-3],
+           top_type:"long",top_color:"#1a1a1a",bottom_type:"long_pants",bottom_color:"#111111",hat:null,mask:false,glasses:null,shoe_color:"#111111",bag_type:"crossbody",bag_color:"#aa7733"},
+         {id:"vic",kind:"victim",label:"피해자",color:"#3ecfb4",height_scale:1.0,pos:[2.2,-3],
+           top_type:"short",top_color:"#3ecfb4",bottom_type:"long_pants",bottom_color:"#2244aa",hat:null,mask:false,glasses:null,shoe_color:"#333333",bag_type:null}],
+       key_event:"가방 탈취 발생",suspect_info:{height:"tall",build:null,clothing_top:"검은 후드티",clothing_bottom:null,face:null,other:null},contradiction:null}},
+    {line:"왼쪽 골목으로 뛰어 도망쳤어요. 마스크를 쓰고 있었어요.",
+     scene:{location:"alley",props:[{id:"store",kind:"store",pos:[0,-6]},{id:"sl",kind:"streetlight",pos:[-7,-2]},{id:"wall",kind:"wall",pos:[0,4]}],
+       entities:[{id:"sus",kind:"suspect",label:"용의자",color:"#1a1a1a",height_scale:1.3,pos:[-9,5],
+           top_type:"long",top_color:"#1a1a1a",bottom_type:"long_pants",bottom_color:"#111111",hat:null,mask:true,glasses:null,shoe_color:"#111111",bag_type:"crossbody",bag_color:"#aa7733"},
+         {id:"vic",kind:"victim",label:"피해자",color:"#3ecfb4",height_scale:1.0,pos:[2.2,-3],
+           top_type:"short",top_color:"#3ecfb4",bottom_type:"long_pants",bottom_color:"#2244aa",hat:null,mask:false,glasses:null,shoe_color:"#333333",bag_type:null}],
+       key_event:"용의자 골목으로 도주",suspect_info:{height:"tall",build:null,clothing_top:"검은 후드티",clothing_bottom:null,face:"마스크 착용",other:null},contradiction:null}},
+  ]},
+  {name:"자전거 날치기 · 4단계", steps:[
+    {line:"저녁 6시쯤 공원 입구에 파란 자전거가 세워져 있었어요.",
+     scene:{location:"park",props:[{id:"bike","kind":"bicycle",pos:[3,0]},{id:"tree","kind":"tree",pos:[-6,-4]}],
+       entities:[],key_event:"자전거 발견",suspect_info:{height:"unknown",build:null,clothing_top:null,clothing_bottom:null,face:null,other:null},contradiction:null}},
+    {line:"캡모자 쓴 청바지 남자가 자전거 쪽으로 걸어왔어요.",
+     scene:{location:"park",props:[{id:"bike","kind":"bicycle",pos:[3,0]},{id:"tree","kind":"tree",pos:[-6,-4]}],
+       entities:[{id:"sus",kind:"suspect",label:"용의자",color:"#334466",height_scale:1.0,pos:[-3,3],
+         top_type:"short",top_color:"#334466",bottom_type:"long_pants",bottom_color:"#1e44aa",hat:"cap",hat_color:"#222222",mask:false,glasses:null,shoe_color:"#1a1a1a",bag_type:null}],
+       key_event:"용의자 접근",suspect_info:{height:"medium",build:null,clothing_top:"반팔",clothing_bottom:"청바지",face:"캡모자",other:null},contradiction:null}},
+    {line:"벤치에 앉아 있던 할머니가 그 모습을 보고 있었어요.",
+     scene:{location:"park",props:[{id:"bike","kind":"bicycle",pos:[3,0]},{id:"tree","kind":"tree",pos:[-6,-4]},{id:"bench","kind":"bench",pos:[-5,3]}],
+       entities:[{id:"sus",kind:"suspect",label:"용의자",color:"#334466",height_scale:1.0,pos:[1,0],
+           top_type:"short",top_color:"#334466",bottom_type:"long_pants",bottom_color:"#1e44aa",hat:"cap",hat_color:"#222222",mask:false,glasses:null,shoe_color:"#1a1a1a",bag_type:null},
+         {id:"bys",kind:"bystander",label:"목격자",color:"#7d90a8",height_scale:0.9,pos:[-5,3],
+           top_type:"long",top_color:"#7d90a8",bottom_type:"long_skirt",bottom_color:"#556677",hat:null,mask:false,glasses:"glasses",shoe_color:"#333333",bag_type:"handbag",bag_color:"#884422"}],
+       key_event:"목격자 발견",suspect_info:{height:"medium",build:null,clothing_top:"반팔",clothing_bottom:"청바지",face:"캡모자",other:null},contradiction:null}},
+    {line:"남자가 자전거를 타고 출구 방향으로 빠르게 사라졌어요. 백팩을 메고 있었어요.",
+     scene:{location:"park",props:[{id:"bike","kind":"bicycle",pos:[10,5]},{id:"tree","kind":"tree",pos:[-6,-4]},{id:"bench","kind":"bench",pos:[-5,3]}],
+       entities:[{id:"sus",kind:"suspect",label:"용의자",color:"#334466",height_scale:1.0,pos:[9,5],
+           top_type:"short",top_color:"#334466",bottom_type:"long_pants",bottom_color:"#1e44aa",hat:"cap",hat_color:"#222222",mask:false,glasses:null,shoe_color:"#1a1a1a",bag_type:"backpack",bag_color:"#333333"},
+         {id:"bys",kind:"bystander",label:"목격자",color:"#7d90a8",height_scale:0.9,pos:[-5,3],
+           top_type:"long",top_color:"#7d90a8",bottom_type:"long_skirt",bottom_color:"#556677",hat:null,mask:false,glasses:"glasses",shoe_color:"#333333",bag_type:"handbag",bag_color:"#884422"}],
+       key_event:"용의자 자전거로 도주",suspect_info:{height:"medium",build:null,clothing_top:"반팔",clothing_bottom:"청바지",face:"캡모자",other:"백팩 소지"},contradiction:null}},
+  ]},
+];
+
+const presetsEl=document.getElementById('presets');
+PRESETS.forEach((p,i)=>{
+  const b=document.createElement('button'); b.className='preset-btn';
+  b.innerHTML=`<b>${String(i+1).padStart(2,'0')}</b>${p.name}`;
+  b.onclick=()=>playPreset(p); presetsEl.appendChild(b);
+});
+
+let playing=false;
+async function playPreset(p){
+  if(playing) return; playing=true;
+  document.getElementById('resetBtn').onclick();
+  setStatus("시나리오 재생 중…",true);
+  for(const step of p.steps){
+    addLog(step.line,false,witnesses[0].name);
+    accumulated+=(accumulated?" ":"")+step.line;
+    addTimelineItem(step.line,witnesses[0].name);
+    applyScene(step.scene);
+    if(step.scene.suspect_info) updateMontage(step.scene);
+    await new Promise(r=>setTimeout(r,2400));
+  }
+  setStatus("시나리오 재생 완료",false,true);
+  playing=false;
+}
+
+/* ═══════════════════════════════════════════════
+   MAP SCENE — 좌표 → OSM 건물 (사용자 코드 통합)
+═══════════════════════════════════════════════ */
+const OSM_PALETTE = [0x1d242f,0x202832,0x232c38,0x27313f,0x2a3543];
+
+function clearCity(){
+  for(let i=cityGroup.children.length-1;i>=0;i--){
+    const o=cityGroup.children[i];
+    o.traverse(n=>{ if(n.geometry) n.geometry.dispose(); });
+    cityGroup.remove(o);
+  }
+  buildingRecs=[]; lastBuildingRec=null;
+}
+
+async function fetchOSM(lat, lon){
+  const radius=400;
+  const q=`[out:json][timeout:25];(way["building"](around:${radius},${lat},${lon}););out body;>;out skel qt;`;
+  const eps=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+  let lastErr;
+  for(const ep of eps){
+    try{
+      const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),25000);
+      const res=await fetch(ep+'?data='+encodeURIComponent(q),{signal:ctrl.signal});
+      clearTimeout(to);
+      if(!res.ok){ lastErr=new Error('HTTP '+res.status); continue; }
+      return await res.json();
+    }catch(e){ lastErr=e; }
+  }
+  throw lastErr||new Error('네트워크 오류');
+}
+
+function parseBuildings(json){
+  const nodes=new Map();
+  (json.elements||[]).forEach(el=>{ if(el.type==='node') nodes.set(el.id,{lat:el.lat,lon:el.lon}); });
+  const out=[];
+  (json.elements||[]).forEach(el=>{
+    if(el.type!=='way'||!el.nodes) return;
+    const pts=el.nodes.map(id=>nodes.get(id)).filter(Boolean);
+    if(pts.length<3) return;
+    const tags=el.tags||{};
+    let h=15;  // 높이 태그 없으면 5층(15m) 가정
+    if(tags.height) h=parseFloat(tags.height)||h;
+    else if(tags['building:levels']) h=(parseFloat(tags['building:levels'])||5)*3;
+    out.push({pts,h});
+  });
+  return out;
+}
+
+function buildFromOSM(lat0, lon0, buildings){
+  const mLat=111320, mLon=111320*Math.cos(lat0*Math.PI/180);
+  const RADIUS_M=400, VIEW=22, S=VIEW/RADIUS_M;   // 반경 400m → 화면 22단위로 압축
+  buildings.forEach(b=>{
+    const shape=new THREE.Shape();
+    let sx=0, sz=0, n=0;
+    b.pts.forEach((p,k)=>{
+      const x=(p.lon-lon0)*mLon*S;
+      const z=(p.lat-lat0)*mLat*S;
+      sx+=x; sz+=z; n++;
+      k?shape.lineTo(x,z):shape.moveTo(x,z);
+    });
+    const height=Math.min(14, Math.max(2, b.h*S*2.0));   // 한 동이 화면을 가리지 않게 상한
+    let geo;
+    try{ geo=new THREE.ExtrudeGeometry(shape,{depth:height,bevelEnabled:false}); }
+    catch(_){ return; }
+    geo.rotateX(-Math.PI/2);
+    const baseHex=OSM_PALETTE[Math.min(OSM_PALETTE.length-1, Math.floor(b.h/12))];
+    // 건물마다 고유 머티리얼 → 언급된 건물만 색을 바꿀 수 있음
+    const mesh=new THREE.Mesh(geo, new THREE.MeshStandardMaterial({color:baseHex, roughness:.85, metalness:.05}));
+    cityGroup.add(mesh);
+    buildingRecs.push({mesh, cx:sx/n, cz:sz/n, baseHex, identified:false});
+  });
+}
+
+async function loadScene(lat, lon){
+  setStatus('현장 불러오는 중… ('+lat.toFixed(4)+', '+lon.toFixed(4)+') — OSM 질의', true);
+  document.getElementById('coordTag').textContent = lat.toFixed(4)+', '+lon.toFixed(4);
+  try{
+    const json = await fetchOSM(lat, lon);
+    const buildings = parseBuildings(json);
+    if(!buildings.length) throw new Error('건물 데이터 없음');
+    clearCity();
+    buildFromOSM(lat, lon, buildings);
+    setStatus('현장 재현 완료 · 건물 '+buildings.length+'동 (OpenStreetMap)', false, true);
+  }catch(err){
+    setStatus('현장 로드 실패('+err.message+') — 좌표를 확인하세요.', false, false);
+  }
+}
+
+/* ── 목격자가 언급한 특정 건물만 색칠 ── */
+const BUILDING_COLORS = {
+  벽돌:0x9c5b4a, 적벽돌:0x9c5b4a, 붉은:0x9c5b4a,
+  통유리:0x86a2bd, 유리:0x86a2bd,
+  하얀:0xf4f7fa, 흰:0xf4f7fa, 하양:0xf4f7fa,
+  검은:0x40454d, 검정:0x40454d, 회색:0x9aa3ad,
+  파란:0x3f6fb0, 파랑:0x3f6fb0, 빨간:0xb1503f, 빨강:0xb1503f,
+  노란:0xd8b24a, 갈색:0x7a5a3a, 베이지:0xd8cdb4, 초록:0x3f8f63, 주황:0xdb8a3c
+};
+function buildingColorFrom(t){
+  for(const k of Object.keys(BUILDING_COLORS)){ if(t.includes(k)) return BUILDING_COLORS[k]; }
+  return null;
+}
+function pickBuilding(t){
+  if(!buildingRecs.length) return null;
+  if(/그 ?건물|그 ?빌딩|아까 ?그|방금 ?그/.test(t) && lastBuildingRec) return lastBuildingRec;
+  const all=buildingRecs;
+  const flank=all.filter(b=>Math.abs(b.cz)<13);
+  const front=all.filter(b=>Math.abs(b.cx)<13);
+  if(/왼쪽/.test(t)) return (flank.length?flank:all).slice().sort((a,b)=>a.cx-b.cx)[0];
+  if(/오른쪽/.test(t)) return (flank.length?flank:all).slice().sort((a,b)=>b.cx-a.cx)[0];
+  if(/앞|정면|건너편/.test(t)) return (front.length?front:all).slice().sort((a,b)=>b.cz-a.cz)[0];
+  if(/뒤/.test(t)) return (front.length?front:all).slice().sort((a,b)=>a.cz-b.cz)[0];
+  // 방향 미지정: 등장인물 평균 위치(없으면 원점)에 가장 가까운 미식별 건물
+  let rx=0,rz=0,cnt=0;
+  entities.forEach(r=>{ rx+=r.target.x; rz+=r.target.z; cnt++; });
+  if(cnt){ rx/=cnt; rz/=cnt; }
+  const pool=all.filter(b=>!b.identified).length?all.filter(b=>!b.identified):all;
+  return pool.slice().sort((a,b)=>((a.cx-rx)**2+(a.cz-rz)**2)-((b.cx-rx)**2+(b.cz-rz)**2))[0];
+}
+function recolorBuilding(rec, hex){
+  rec.mesh.traverse(n=>{
+    if(n.isMesh && n.material && n.material.color){
+      n.material=n.material.clone();   // 공유 방지: 이 건물만 변경
+      n.material.color.setHex(hex);
+      n.material.needsUpdate=true;
+    }
+  });
+  rec.identified=true; lastBuildingRec=rec;
+}
+function resetBuildingColors(){
+  buildingRecs.forEach(r=>{
+    r.mesh.traverse(n=>{ if(n.isMesh && n.material && n.material.color) n.material.color.setHex(r.baseHex); });
+    r.identified=false;
+  });
+  lastBuildingRec=null;
+}
+function applyBuildingMention(t){
+  if(!/건물|빌딩|상가|타워|아파트|상점|가게|편의점|건너편|벽돌/.test(t)) return false;
+  const rec=pickBuilding(t);
+  if(!rec) return false;
+  const col=buildingColorFrom(t);
+  recolorBuilding(rec, col!=null?col:0xc9a86a);   // 색 명시 없으면 식별 하이라이트
+  return true;
+}
+
+/* 좌표 불러오기 버튼 */
+document.getElementById('loadBtn').onclick=()=>{
+  const v=document.getElementById('coordIn').value.trim();
+  const m=v.match(/(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)/);
+  if(!m){ setStatus('좌표 형식 오류 — 예: 37.4659, 127.0376', false, false); return; }
+  loadScene(parseFloat(m[1]), parseFloat(m[2]));
+};
+
+/* ═══════════════════════════════════════════════
+   BOOT
+═══════════════════════════════════════════════ */
+document.getElementById('caseId').textContent='CASE-'+String(Math.floor(Math.random()*9000)+1000);
+init3D();
+renderWitnesses();
+loadScene(37.4659, 127.0376);   // 부팅 시 양재 서울 AI 허브 현장 로드
+</script>
+</body>
+</html>

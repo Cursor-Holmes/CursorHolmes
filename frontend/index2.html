@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CursorHolmes — 진술 기반 사건 재구성</title>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" rel="stylesheet">
+<link rel="stylesheet" href="css/style_annotated_polished.css">
+</head>
+<body>
+
+<!-- ── 수사관 로그인 ── -->
+<div id="loginOverlay" class="full-overlay">
+  <div class="rc-auth">
+    <div class="rc-auth-hero">
+      <div class="rc-auth-kicker rc-auth-kicker-long">Early-Stage Crime Investigation Management Support Tool</div>
+      <h1 class="rc-auth-title">CursorHolmes</h1>
+      <p class="rc-auth-desc">음성·텍스트 진술을 분석해 3D 지도 위에 사건 현장, 인물, 타임라인을 자동으로 재현하는 <span class="rc-nowrap">수사 지원 시스템입니다.</span></p>
+    </div>
+    <div class="rc-auth-panel">
+      <div class="login-box">
+        <div class="login-logo">CursorHolmes</div>
+        <div class="login-sub">수사관 로그인</div>
+        <div class="f-group"><label>수사관 이름</label><input id="detName" type="text" placeholder="이름 입력" autocomplete="off"></div>
+        <div class="f-group"><label>배지 번호</label><input id="detBadge" type="text" placeholder="예: 20241234" autocomplete="off"></div>
+        <button id="loginBtn" class="primary full-w">로그인</button>
+        <div class="login-disc">본 시스템은 수사 목적으로만 사용됩니다.<br>권한 없는 접근은 법적 처벌을 받을 수 있습니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 사건 선택 / 생성 ── -->
+<div id="caseOverlay" class="full-overlay" style="display:none">
+  <div class="rc-auth">
+    <div class="rc-auth-hero">
+      <div class="rc-auth-kicker rc-auth-kicker-long">Early-Stage Crime Investigation Management Support Tool</div>
+      <h1 class="rc-auth-title">CursorHolmes</h1>
+      <p class="rc-auth-desc">저장된 사건을 이어서 조사하거나, 새 사건을 생성해 진술 기반 재구성을 <span class="rc-nowrap">시작하세요.</span></p>
+    </div>
+    <div class="rc-auth-panel">
+      <div class="case-box">
+        <div class="case-hdr-row">
+          <div>
+            <div class="case-logo">CursorHolmes</div>
+            <div class="det-info" id="detBadgeDisplay"></div>
+          </div>
+          <button id="newCaseBtn" class="primary">+ 새 사건</button>
+        </div>
+        <div class="case-list-lbl">진행 중인 사건</div>
+        <div id="caseListEl" class="case-list"></div>
+        <div class="new-case-form" id="newCaseForm">
+          <label style="font-size:12px;font-weight:600;color:var(--ink2)">사건명</label>
+          <input id="caseNameInput" type="text" placeholder="예: 강남구 편의점 날치기 사건" autocomplete="off">
+          <label style="font-size:12px;font-weight:600;color:var(--ink2);margin-top:4px">사건 발생 일시</label>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="cdYear" class="dt-sel" style="flex:2;min-width:72px"></select><span style="color:var(--ink3);font-size:12px">년</span>
+            <select id="cdMonth" class="dt-sel" style="flex:1.2;min-width:56px"></select><span style="color:var(--ink3);font-size:12px">월</span>
+            <select id="cdDay" class="dt-sel" style="flex:1.2;min-width:56px"></select><span style="color:var(--ink3);font-size:12px">일</span>
+            <select id="cdHour" class="dt-sel" style="flex:1.2;min-width:56px"></select><span style="color:var(--ink3);font-size:12px">시</span>
+            <select id="cdMin" class="dt-sel" style="flex:1.2;min-width:56px"></select><span style="color:var(--ink3);font-size:12px">분</span>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <button id="createCaseBtn" class="primary" style="flex:1">생성 및 시작</button>
+            <button id="cancelCaseBtn" class="ghost">취소</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 앱 본체 ── -->
+<div id="appShell">
+  <header class="rc-topbar">
+    <div class="rc-topbar-brand">
+      <span class="rec-dot" id="recDot"></span>
+      <div>
+        <div class="hdr-title">CursorHolmes</div>
+        <div class="hdr-sub" id="hdrSub">witness statement → live map reconstruction</div>
+      </div>
+    </div>
+    <div class="rc-topbar-meta">
+      <span class="badge case" id="caseId">CASE-0001</span>
+      <span class="badge wit" id="witCount">증인 1명</span>
+      <span class="badge loc" id="coordTag">좌표 미설정</span>
+      <span class="badge loc" id="locTag">위치 미상</span>
+      <button class="icon-btn" id="settingsBtn" title="API 설정">⚙</button>
+      <button class="icon-btn" id="captureBtn" title="장면 캡처">📷</button>
+    </div>
+  </header>
+
+  <div class="rc-main">
+    <!-- 좌측 모듈 레일 -->
+    <nav class="rc-rail" aria-label="작업 모듈">
+      <div class="rc-rail-mark" title="CursorHolmes">CH</div>
+      <button class="tab-btn active" data-tab="input" title="진술 입력">
+        <span class="rc-tab-icon">🎙</span>진술
+      </button>
+      <button class="tab-btn" data-tab="montage" title="몽타주">
+        <span class="rc-tab-icon">👤</span>몽타주
+      </button>
+      <button class="tab-btn" data-tab="timeline" title="타임라인">
+        <span class="rc-tab-icon">⏱</span>타임
+      </button>
+      <button class="tab-btn" data-tab="report" title="보고서">
+        <span class="rc-tab-icon">📋</span>보고
+      </button>
+    </nav>
+
+    <!-- 지도 -->
+    <section class="rc-map-zone">
+      <div id="stage">
+        <div id="map"></div>
+        <div class="rc-map-float rc-map-badge">Mapbox 3D · Live Reconstruction</div>
+        <div class="rc-map-float map-controls">
+          <button id="cctvToggleBtn" class="map-ctrl-btn" onclick="toggleCCTV()">📹 CCTV</button>
+        </div>
+        <div class="rc-map-float rc-legend">
+          <span><i style="background:var(--suspect)"></i>용의자</span>
+          <span><i style="background:var(--victim)"></i>피해자</span>
+          <span><i style="background:var(--bystander)"></i>목격자</span>
+          <span><i style="background:var(--gold)"></i>경찰</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 우측 워크스페이스 -->
+    <aside class="rc-workspace">
+      <div class="rc-workspace-head">
+        <div class="rc-workspace-title" id="workspaceTitle">진술</div>
+        <div class="rc-workspace-sub">현장 검색 · 인물 배치 · 음성/텍스트 입력</div>
+      </div>
+
+      <!-- 진술 탭 -->
+      <div class="tab-panel active" id="tab-input">
+        <div class="rc-input-scroll">
+          <div class="rc-card blk">
+            <div class="lbl">사건 현장</div>
+            <div class="inputrow">
+              <input type="text" id="placeIn" placeholder="지명 또는 좌표 (37.4659, 127.0376)" value="서울 AI 허브">
+              <button id="loadBtn" class="ghost">검색</button>
+            </div>
+          </div>
+
+          <div class="rc-card blk">
+            <div class="lbl">인물 직접 배치</div>
+            <div class="role-btns">
+              <button class="role-btn" data-role="suspect">용의자</button>
+              <button class="role-btn" data-role="victim">피해자</button>
+              <button class="role-btn" data-role="bystander">목격자</button>
+              <button class="role-btn" data-role="officer">경찰</button>
+            </div>
+            <div class="place-hint" id="placeHint">지도를 클릭하여 배치 · ESC로 취소</div>
+          </div>
+
+          <div class="rc-card blk">
+            <div class="lbl">증인 선택</div>
+            <div class="witness-row" id="witnessRow">
+              <button class="wit-chip active" data-wid="0">증인 A</button>
+              <button class="wit-chip add" id="addWitBtn">+ 추가</button>
+            </div>
+          </div>
+
+          <div class="rc-card rc-log-card blk">
+            <div class="lbl">진술 로그</div>
+            <div class="log" id="log"></div>
+          </div>
+
+          <div class="rc-card blk rc-preset-card">
+            <div class="lbl">증언에 따른 시나리오 확인</div>
+            <div class="preset-list" id="presets"></div>
+          </div>
+        </div>
+
+        <div class="rc-command">
+          <div class="ctrl-row">
+            <button class="mic" id="micBtn"><span id="micLabel">🎙 음성 진술</span></button>
+            <button class="ghost" id="resetBtn" title="장면 초기화">↺</button>
+          </div>
+          <div class="rc-time-row">
+            <span class="rc-time-label">사건 시각</span>
+            <select id="stmtMonth" class="dt-sel"></select><span class="rc-time-unit">월</span>
+            <select id="stmtDay" class="dt-sel"></select><span class="rc-time-unit">일</span>
+            <select id="stmtHour" class="dt-sel"></select><span class="rc-time-unit">시</span>
+            <select id="stmtMin" class="dt-sel"></select><span class="rc-time-unit">분</span>
+          </div>
+          <div class="inputrow rc-submit-row">
+            <input type="text" id="textIn" placeholder="진술 입력 후 Enter…">
+            <button id="sendBtn" class="primary rc-send-btn">재현</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 몽타주 탭 -->
+      <div class="tab-panel" id="tab-montage">
+        <div id="montagePreviewer">
+          <canvas id="montageCanvas"></canvas>
+          <div class="montage-label">Suspect 3D</div>
+          <div id="montageEmpty" class="montage-no-suspect">
+            <div class="icon">🕵️</div>
+            <p>진술을 입력하면<br>용의자 인상착의가<br>자동으로 재현됩니다</p>
+          </div>
+          <div class="view-btns">
+            <button class="view-btn active" onclick="setMontageView('front')">정면</button>
+            <button class="view-btn" onclick="setMontageView('left')">좌측면</button>
+            <button class="view-btn" onclick="setMontageView('right')">우측면</button>
+            <button class="view-btn" onclick="setMontageView('back')">후면</button>
+            <button class="view-btn active" id="autoRotBtn" onclick="toggleMontageAuto()">자동</button>
+          </div>
+        </div>
+        <div class="montage-section">
+          <div class="lbl">추출된 용의자 정보</div>
+          <div id="montageContent"><div class="montage-empty">진술을 입력하면 용의자 인상착의가 자동 추출됩니다</div></div>
+        </div>
+        <div class="montage-section" style="flex:1;overflow-y:auto">
+          <div class="lbl">기타 등장인물</div>
+          <div id="entityList" style="font-size:13px;color:var(--ink2);line-height:1.8">아직 등록된 인물이 없습니다.</div>
+        </div>
+      </div>
+
+      <!-- 타임라인 탭 -->
+      <div class="tab-panel" id="tab-timeline">
+        <div class="timeline-wrap" id="timelineWrap">
+          <div class="lbl" style="margin-bottom:14px">사건 타임라인</div>
+          <div id="timelineItems"><div class="tl-empty">진술이 추가되면 타임라인이 자동으로 생성됩니다</div></div>
+        </div>
+      </div>
+
+      <!-- 보고서 탭 -->
+      <div class="tab-panel" id="tab-report">
+        <div class="rc-card blk">
+          <div class="lbl">AI 사건 보고서</div>
+          <div class="ctrl-row">
+            <button class="primary" id="genReportBtn">🤖 보고서 생성</button>
+            <button class="ghost" id="copyReportBtn">복사</button>
+          </div>
+        </div>
+        <div class="report-wrap" id="reportWrap">
+          <div style="font-size:12px;color:var(--ink3);text-align:center;padding:40px 0;font-style:italic">진술 입력 후 보고서 생성 버튼을 누르세요</div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="status-bar" id="statusBar">
+    <div class="spin"></div>
+    <div class="status-txt" id="statusTxt">대기 중 — 지명/좌표로 현장을 불러오고 진술을 시작하세요</div>
+    <span class="stat-pill ok" id="statPill">READY</span>
+  </div>
+</div>
+
+<!-- ── API 설정 ── -->
+<div class="overlay" id="settingsOverlay" style="display:none">
+  <div class="overlay-box">
+    <button class="overlay-close" id="settingsClose">✕</button>
+    <h3>API 설정</h3>
+    <label>Mapbox Access Token <span style="color:var(--accent-soft)">(지도·3D 필수)</span></label>
+    <input type="password" id="mapboxInput" placeholder="pk.eyJ1Ij..." style="margin-bottom:6px">
+    <div class="note" style="margin-bottom:12px"><a href="https://account.mapbox.com" target="_blank">mapbox.com</a> → Access tokens → Public token</div>
+    <label>Anthropic API Key <span style="color:var(--ink3)">(선택 · AI 정밀 재현)</span></label>
+    <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." style="margin-bottom:6px">
+    <label style="margin-top:12px">서울 Open API Key <span style="color:var(--ink3)">(선택 · CCTV)</span></label>
+    <input type="password" id="seoulApiKeyInput" placeholder="서울열린데이터광장 인증키" style="margin-bottom:6px">
+    <div class="note">키는 localStorage에 저장됩니다. Anthropic 키 없으면 키워드 모드로 동작합니다.</div>
+    <div class="btn-row">
+      <button class="ghost" id="settingsClose2">취소</button>
+      <button class="primary" id="saveApiKey">저장 및 지도 시작</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js" onerror="window.RECON_CONFIG={}"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/state.js"></script>
+<script src="js/figures.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/evidence.js"></script>
+<script src="js/mapbox-layer.js"></script>
+<script src="js/montage.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/speech.js"></script>
+<script src="js/cctv.js"></script>
+<script src="js/cases.js"></script>
+<script src="js/main.js"></script>
+<script>
+/* v2: 탭 전환 시 워크스페이스 헤더 업데이트 */
+(function () {
+  const titles = {
+    input: ['진술', '현장 검색 · 인물 배치 · 음성/텍스트 입력'],
+    montage: ['용의자 몽타주', '3D 프리뷰 · 인상착의 자동 추출'],
+    timeline: ['사건 타임라인', '진술 순서 · 클릭하여 장면 재현'],
+    report: ['AI 수사 보고서', '진술 종합 · 모순 감지 · 수사 제언']
+  };
+  document.querySelectorAll('.tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var t = titles[btn.dataset.tab];
+      if (!t) return;
+      document.getElementById('workspaceTitle').textContent = t[0];
+      document.querySelector('.rc-workspace-sub').textContent = t[1];
+    });
+  });
+})();
+</script>
+</body>
+</html>
