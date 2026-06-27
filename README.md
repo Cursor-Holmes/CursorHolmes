@@ -1,7 +1,9 @@
 # **🚀 CursorHolmes**
 
 > 목격자의 음성·텍스트 진술을 실시간 분석해, 실제 3D 지도 위에 사건 현장·인물·타임라인을 자동 재구성하는 **초기 수사 단계 지원 도구**입니다.
-> 
+>
+> <img width="540" height="304" alt="demo_fast" src="https://github.com/user-attachments/assets/885f837b-9140-47e7-bd7f-b230888289dc" />
+
 
 ---
 
